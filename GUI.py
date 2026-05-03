@@ -9,8 +9,10 @@ Created on Fri Apr 30 13:36:58 2021
 # import all the required  modules
 import threading
 import select
+from queue import Empty, Queue
 from tkinter import *
 from tkinter import font
+from tkinter import messagebox
 from tkinter import ttk
 from chat_utils import *
 import json
@@ -28,6 +30,11 @@ class GUI:
         self.socket = s
         self.my_msg = ""
         self.system_msg = ""
+        self.outgoing_msgs = Queue()
+        self.ui_msgs = Queue()
+        self.running = False
+        self.process = None
+        self.polling_ui = False
 
     def login(self):
         # login window
@@ -68,6 +75,7 @@ class GUI:
           
         # set the focus of the curser
         self.entryName.focus()
+        self.entryName.bind("<Return>", lambda event: self.goAhead(self.entryName.get()))
           
         # create a Continue Button 
         # along with action
@@ -81,6 +89,7 @@ class GUI:
         self.Window.mainloop()
   
     def goAhead(self, name):
+        name = name.strip()
         if len(name) > 0:
             msg = json.dumps({"action":"login", "name": name})
             self.send(msg)
@@ -90,17 +99,19 @@ class GUI:
                 self.sm.set_state(S_LOGGEDIN)
                 self.sm.set_myname(name)
                 self.layout(name)
-                self.textCons.config(state = NORMAL)
-                # self.textCons.insert(END, "hello" +"\n\n")   
-                self.textCons.insert(END, menu +"\n\n")      
-                self.textCons.config(state = DISABLED)
-                self.textCons.see(END)
+                self.display_system_message(menu)
+                self.start_ui_queue()
                 # while True:
                 #     self.proc()
-        # the thread to receive messages
-            process = threading.Thread(target=self.proc)
-            process.daemon = True
-            process.start()
+                # the thread to receive messages
+                self.running = True
+                self.process = threading.Thread(target=self.proc)
+                self.process.daemon = True
+                self.process.start()
+            else:
+                messagebox.showerror("Login failed", "This name is already in use.")
+        else:
+            messagebox.showwarning("Login", "Please enter a name.")
   
     # The main layout of the chat
     def layout(self,name):
@@ -130,18 +141,36 @@ class GUI:
                         rely = 0.07,
                         relheight = 0.012)
           
-        self.textCons = Text(self.Window,
-                             width = 20, 
+        # Window area for displaying chat and system messages.
+        self.messageFrame = Frame(self.Window,
+                                  bg = "#17202A")
+        self.messageFrame.place(relheight = 0.745,
+                                relwidth = 1,
+                                rely = 0.08)
+
+        self.textCons = Text(self.messageFrame,
+                             width = 20,
                              height = 2,
                              bg = "#17202A",
                              fg = "#EAECEE",
-                             font = "Helvetica 14", 
-                             padx = 5,
-                             pady = 5)
-          
-        self.textCons.place(relheight = 0.745,
-                            relwidth = 1, 
-                            rely = 0.08)
+                             font = "Helvetica 14",
+                             padx = 8,
+                             pady = 8,
+                             wrap = WORD,
+                             state = DISABLED)
+
+        self.textCons.pack(side = LEFT,
+                           fill = BOTH,
+                           expand = True)
+
+        scrollbar = Scrollbar(self.messageFrame,
+                              command = self.textCons.yview)
+        scrollbar.pack(side = RIGHT,
+                       fill = Y)
+        self.textCons.config(yscrollcommand = scrollbar.set)
+        self.textCons.tag_config("system", foreground = "#F1C40F")
+        self.textCons.tag_config("me", foreground = "#82E0AA")
+        self.textCons.tag_config("peer", foreground = "#85C1E9")
           
         self.labelBottom = Label(self.Window,
                                  bg = "#ABB2B9",
@@ -163,6 +192,7 @@ class GUI:
                             relx = 0.011)
           
         self.entryMsg.focus()
+        self.entryMsg.bind("<Return>", lambda event: self.sendButton(self.entryMsg.get()))
           
         # create a Send Button
         self.buttonMsg = Button(self.labelBottom,
@@ -179,41 +209,95 @@ class GUI:
           
         self.textCons.config(cursor = "arrow")
           
-        # create a scroll bar
-        scrollbar = Scrollbar(self.textCons)
-          
-        # place the scroll bar 
-        # into the gui window
-        scrollbar.place(relheight = 1,
-                        relx = 0.974)
-          
-        scrollbar.config(command = self.textCons.yview)
-          
         self.textCons.config(state = DISABLED)
+
+    def display_message(self, msg, tag = "system"):
+        if len(msg) == 0:
+            return
+
+        self.textCons.config(state = NORMAL)
+        self.textCons.insert(END, msg + "\n\n", tag)
+        self.textCons.config(state = DISABLED)
+        self.textCons.see(END)
+
+    def display_system_message(self, msg):
+        msg = msg.strip()
+        if len(msg) > 0:
+            self.display_message("[System] " + msg, "system")
+
+    def display_chat_message(self, sender, msg, tag):
+        msg = msg.strip()
+        if len(msg) > 0:
+            self.display_message("[" + sender + "] " + msg, tag)
+
+    def display_state_output(self, msg):
+        msg = msg.strip()
+        if len(msg) == 0:
+            return
+
+        sender, body = self.parse_peer_message(msg)
+        if sender is not None:
+            self.display_chat_message(sender, body, "peer")
+        else:
+            self.display_system_message(msg)
+
+    def parse_peer_message(self, msg):
+        if msg.startswith("[") and "]" in msg:
+            end = msg.find("]")
+            sender = msg[1:end].strip()
+            body = msg[end + 1:].strip()
+            if len(sender) > 0 and len(body) > 0:
+                return sender, body
+        return None, None
+
+    def start_ui_queue(self):
+        if self.polling_ui == False:
+            self.polling_ui = True
+            self.Window.after(100, self.process_ui_queue)
+
+    def process_ui_queue(self):
+        while True:
+            try:
+                msg = self.ui_msgs.get_nowait()
+            except Empty:
+                break
+            self.display_state_output(msg)
+
+        if self.running == True:
+            self.Window.after(100, self.process_ui_queue)
+        else:
+            self.polling_ui = False
   
     # function to basically start the thread for sending messages
     def sendButton(self, msg):
-        self.textCons.config(state = DISABLED)
-        self.my_msg = msg
+        msg = msg.strip()
+        if len(msg) == 0:
+            return
+
+        if self.sm.get_state() == S_CHATTING:
+            self.display_chat_message("Me", msg, "me")
+
+        self.outgoing_msgs.put(msg)
         # print(msg)
         self.entryMsg.delete(0, END)
 
     def proc(self):
         # print(self.msg)
-        while True:
-            read, write, error = select.select([self.socket], [], [], 0)
-            peer_msg = []
+        while self.running == True:
+            read, write, error = select.select([self.socket], [], [], 0.1)
+            peer_msg = ""
+            my_msg = ""
             # print(self.msg)
             if self.socket in read:
                 peer_msg = self.recv()
-            if len(self.my_msg) > 0 or len(peer_msg) > 0:
+            try:
+                my_msg = self.outgoing_msgs.get_nowait()
+            except Empty:
+                my_msg = ""
+            if len(my_msg) > 0 or len(peer_msg) > 0:
                 # print(self.system_msg)
-                self.system_msg += self.sm.proc(self.my_msg, peer_msg)
-                self.my_msg = ""
-                self.textCons.config(state = NORMAL)
-                self.textCons.insert(END, self.system_msg +"\n\n")      
-                self.textCons.config(state = DISABLED)
-                self.textCons.see(END)
+                self.system_msg = self.sm.proc(my_msg, peer_msg)
+                self.ui_msgs.put(self.system_msg)
 
     def run(self):
         self.login()
