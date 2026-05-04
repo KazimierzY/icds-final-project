@@ -122,11 +122,28 @@ class ClientSM:
 #==============================================================================
         elif self.state == S_CHATTING:
             if len(my_msg) > 0:     # my stuff going out
-                mysend(self.s, json.dumps({"action":"exchange", "from":"[" + self.me + "]", "message":my_msg}))
                 if my_msg == 'bye':
                     self.disconnect()
                     self.state = S_LOGGEDIN
                     self.peer = ''
+                elif my_msg[0] == '?':
+                    term = my_msg[1:].strip()
+                    mysend(self.s, json.dumps({"action":"search", "target":term}))
+                    search_rslt = json.loads(myrecv(self.s))["results"].strip()
+                    if (len(search_rslt) > 0):
+                        self.out_msg += search_rslt + '\n\n'
+                    else:
+                        self.out_msg += '\'' + term + '\'' + ' not found\n\n'
+                elif my_msg[0] == 'p' and my_msg[1:].strip().isdigit():
+                    poem_idx = my_msg[1:].strip()
+                    mysend(self.s, json.dumps({"action":"poem", "target":poem_idx}))
+                    poem = json.loads(myrecv(self.s))["results"]
+                    if (len(poem) > 0):
+                        self.out_msg += poem + '\n\n'
+                    else:
+                        self.out_msg += 'Sonnet ' + poem_idx + ' not found\n\n'
+                else:
+                    mysend(self.s, json.dumps({"action":"exchange", "from":"[" + self.me + "]", "message":my_msg}))
             if len(peer_msg) > 0:    # peer's stuff, coming in
                 peer_msg = json.loads(peer_msg)
                 if peer_msg["action"] == "connect":

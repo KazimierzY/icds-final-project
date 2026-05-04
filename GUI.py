@@ -390,15 +390,11 @@ class GUI:
             self.sendButton("c " + peer.strip())
 
     def ask_poem(self):
-        if self.can_use_menu_command() == False:
-            return
         poem_idx = simpledialog.askstring("Poem", "Enter sonnet number:", parent = self.Window)
         if poem_idx is not None and len(poem_idx.strip()) > 0:
             self.sendButton("p " + poem_idx.strip())
 
     def ask_search(self):
-        if self.can_use_menu_command() == False:
-            return
         term = simpledialog.askstring("Search", "Enter search term:", parent = self.Window)
         if term is not None and len(term.strip()) > 0:
             self.sendButton("? " + term.strip())
@@ -472,13 +468,24 @@ class GUI:
         if len(msg) == 0:
             return
 
-        if self.sm.get_state() == S_CHATTING:
+        if self.should_display_as_chat_message(msg):
             self.display_chat_message("Me", msg, "me")
 
         self.outgoing_msgs.put(msg)
         self.update_sidebar()
         # print(msg)
         self.entryMsg.delete(0, END)
+
+    def should_display_as_chat_message(self, msg):
+        if self.sm.get_state() != S_CHATTING:
+            return False
+        if msg == "bye":
+            return False
+        if msg[0] == "?":
+            return False
+        if msg[0] == "p" and msg[1:].strip().isdigit():
+            return False
+        return True
 
     def proc(self):
         # print(self.msg)
