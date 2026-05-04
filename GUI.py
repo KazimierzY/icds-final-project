@@ -9,9 +9,12 @@ Created on Fri Apr 30 13:36:58 2021
 # import all the required  modules
 import threading
 import select
+import base64
+import os
 from queue import Empty, Queue
 from tkinter import *
 from tkinter import font
+from tkinter import filedialog
 from tkinter import messagebox
 from tkinter import simpledialog
 from tkinter import ttk
@@ -317,6 +320,21 @@ class GUI:
                               padx = (0, 8),
                               pady = 10)
 
+        self.fileButton = Button(self.labelBottom,
+                                 text = "File",
+                                 font = "Helvetica 10",
+                                 width = 5,
+                                 bg = "#F5F5F5",
+                                 fg = "#333333",
+                                 activebackground = "#E5E7EB",
+                                 activeforeground = "#111111",
+                                 relief = FLAT,
+                                 command = self.send_file)
+        self.fileButton.pack(side = LEFT,
+                             fill = Y,
+                             padx = (0, 8),
+                             pady = 10)
+
         self.entryMsg = Entry(self.labelBottom,
                               bg = "#FFFFFF",
                               fg = "#111111",
@@ -435,6 +453,34 @@ class GUI:
         self.entryMsg.insert(INSERT, emoji)
         self.entryMsg.focus()
 
+    def send_file(self):
+        if self.sm.get_state() != S_CHATTING:
+            messagebox.showinfo("File Transfer", "Connect to another user before sending a file.")
+            return
+
+        file_path = filedialog.askopenfilename(parent = self.Window,
+                                               title = "Choose a file to send")
+        if len(file_path) == 0:
+            return
+
+        file_size = os.path.getsize(file_path)
+        if file_size > 5 * 1024 * 1024:
+            messagebox.showwarning("File Transfer", "Please choose a file smaller than 5 MB.")
+            return
+
+        with open(file_path, "rb") as file:
+            encoded = base64.b64encode(file.read()).decode("ascii")
+
+        filename = os.path.basename(file_path)
+        payload = {
+            "filename": filename,
+            "size": file_size,
+            "data": encoded
+        }
+        self.outgoing_msgs.put(FILE_CMD_PREFIX + json.dumps(payload))
+        self.display_chat_message("Me", "[file] " + filename, "me")
+        self.entryMsg.focus()
+
     def update_sidebar(self):
         if self.sm.get_state() == S_CHATTING and len(self.sm.peer) > 0:
             peer = self.sm.peer
@@ -500,6 +546,11 @@ class GUI:
         if len(msg) == 0:
             return
 
+        if msg.startswith(FILE_RECV_PREFIX):
+            self.receive_file(msg[len(FILE_RECV_PREFIX):])
+            self.update_sidebar()
+            return
+
         sender, body = self.parse_peer_message(msg)
         if sender is not None:
             self.display_chat_message(sender, body, "peer")
@@ -515,6 +566,23 @@ class GUI:
             if len(sender) > 0 and len(body) > 0:
                 return sender, body
         return None, None
+
+    def receive_file(self, file_json):
+        file_msg = json.loads(file_json)
+        sender = file_msg["from"].strip("[]")
+        filename = file_msg["filename"]
+        self.display_chat_message(sender, "[file] " + filename, "peer")
+
+        save_path = filedialog.asksaveasfilename(parent = self.Window,
+                                                 title = "Save received file",
+                                                 initialfile = filename)
+        if len(save_path) == 0:
+            self.display_system_message("File from " + sender + " was not saved.")
+            return
+
+        with open(save_path, "wb") as file:
+            file.write(base64.b64decode(file_msg["data"]))
+        self.display_system_message("Saved file from " + sender + ": " + save_path)
 
     def start_ui_queue(self):
         if self.polling_ui == False:
@@ -558,6 +626,8 @@ class GUI:
         if msg == "who":
             return False
         if msg[0] == "c":
+            return False
+        if msg.startswith(FILE_CMD_PREFIX):
             return False
         if msg[0] == "?":
             return False

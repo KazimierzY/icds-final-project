@@ -126,6 +126,16 @@ class ClientSM:
                     self.disconnect()
                     self.state = S_LOGGEDIN
                     self.peer = ''
+                elif my_msg.startswith(FILE_CMD_PREFIX):
+                    file_msg = json.loads(my_msg[len(FILE_CMD_PREFIX):])
+                    mysend(self.s, json.dumps({
+                        "action": "file",
+                        "from": "[" + self.me + "]",
+                        "filename": file_msg["filename"],
+                        "size": file_msg["size"],
+                        "data": file_msg["data"]
+                    }))
+                    self.out_msg += "Sent file: " + file_msg["filename"] + "\n"
                 elif my_msg == 'time':
                     mysend(self.s, json.dumps({"action":"time"}))
                     time_in = json.loads(myrecv(self.s))["results"]
@@ -166,6 +176,8 @@ class ClientSM:
                     self.out_msg += "(" + peer_msg["from"] + " joined)\n"
                 elif peer_msg["action"] == "disconnect":
                     self.state = S_LOGGEDIN
+                elif peer_msg["action"] == "file":
+                    self.out_msg += FILE_RECV_PREFIX + json.dumps(peer_msg)
                 else:
                     self.out_msg += peer_msg["from"] + peer_msg["message"]
 

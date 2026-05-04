@@ -14,6 +14,7 @@ menu = "\n++++ Choose one of the following commands\n \
         who: to find out who else are there\n \
         c _peer_: to connect to the _peer_ and chat\n \
         bye: to leave the current chat and return to the command menu\n \
+        File button: send a small file to the current chat\n \
         ? _term_: to search your chat logs where _term_ appears\n \
         p _#_: to get number <#> sonnet\n \
         q: to leave the chat system\n\n"
@@ -23,9 +24,12 @@ S_CONNECTED = 1
 S_LOGGEDIN  = 2
 S_CHATTING  = 3
 
-SIZE_SPEC = 5
+SIZE_SPEC = 8
 
 CHAT_WAIT = 0.2
+
+FILE_CMD_PREFIX = "__file_transfer__:"
+FILE_RECV_PREFIX = "__received_file__:"
 
 def print_state(state):
     print('**** State *****::::: ')

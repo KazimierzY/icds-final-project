@@ -135,6 +135,25 @@ class Server:
                     self.indices[g].add_msg_and_index(said2)
                     mysend(to_sock, json.dumps({"action":"exchange", "from":msg["from"], "message":msg["message"]}))
 #==============================================================================
+# handle file transfer
+#==============================================================================
+            elif msg["action"] == "file":
+                from_name = self.logged_sock2name[from_sock]
+                the_guys = self.group.list_me(from_name)
+                filename = msg["filename"]
+                file_note = text_proc("[file] " + filename, from_name)
+                self.indices[from_name].add_msg_and_index(file_note)
+                for g in the_guys[1:]:
+                    to_sock = self.logged_name2sock[g]
+                    self.indices[g].add_msg_and_index(file_note)
+                    mysend(to_sock, json.dumps({
+                        "action": "file",
+                        "from": msg["from"],
+                        "filename": filename,
+                        "size": msg["size"],
+                        "data": msg["data"]
+                    }))
+#==============================================================================
 #                 listing available peers
 #==============================================================================
             elif msg["action"] == "list":
