@@ -36,6 +36,7 @@ class GUI:
         self.running = False
         self.process = None
         self.polling_ui = False
+        self.emoji_panel_visible = False
 
     def login(self):
         # login window
@@ -101,11 +102,12 @@ class GUI:
                 self.sm.set_myname(name)
                 self.layout(name)
                 self.display_system_message(menu)
+                self.running = True
                 self.start_ui_queue()
+                self.entryMsg.focus_set()
                 # while True:
                 #     self.proc()
                 # the thread to receive messages
-                self.running = True
                 self.process = threading.Thread(target=self.proc)
                 self.process.daemon = True
                 self.process.start()
@@ -300,6 +302,21 @@ class GUI:
                               pady = (0, 14))
         self.labelBottom.pack_propagate(False)
           
+        self.emojiButton = Button(self.labelBottom,
+                                  text = "\u263A",
+                                  font = ("Segoe UI Symbol", 16),
+                                  width = 3,
+                                  bg = "#F5F5F5",
+                                  fg = "#333333",
+                                  activebackground = "#E5E7EB",
+                                  activeforeground = "#111111",
+                                  relief = FLAT,
+                                  command = self.toggle_emoji_panel)
+        self.emojiButton.pack(side = LEFT,
+                              fill = Y,
+                              padx = (0, 8),
+                              pady = 10)
+
         self.entryMsg = Entry(self.labelBottom,
                               bg = "#FFFFFF",
                               fg = "#111111",
@@ -318,6 +335,7 @@ class GUI:
           
         self.entryMsg.focus()
         self.entryMsg.bind("<Return>", lambda event: self.sendButton(self.entryMsg.get()))
+        self.Window.bind("<Return>", lambda event: self.sendButton(self.entryMsg.get()))
           
         # create a Send Button
         self.buttonMsg = Button(self.labelBottom,
@@ -338,6 +356,10 @@ class GUI:
         self.textCons.config(cursor = "arrow")
           
         self.textCons.config(state = DISABLED)
+        try:
+            self.add_emoji_panel()
+        except Exception:
+            self.emojiPanel = None
         self.update_sidebar()
 
     def add_sidebar_button(self, text, command):
@@ -356,6 +378,63 @@ class GUI:
                     padx = 16,
                     pady = 4)
 
+    def add_emoji_panel(self):
+        self.emojiPanel = Frame(self.rightPanel,
+                                bg = "#FFFFFF",
+                                bd = 1,
+                                relief = SOLID)
+        emojis = [
+            "\U0001F600",
+            "\U0001F602",
+            "\U0001F60A",
+            "\U0001F44D",
+            "\u2764",
+            "\U0001F389",
+            "\U0001F525",
+            "\U0001F64F",
+        ]
+        fallbacks = [":)", ":D", "^_^", "+1", "<3", "yay", "!!", "thx"]
+
+        for index, emoji in enumerate(emojis):
+            try:
+                button = self.create_emoji_button(emoji)
+            except TclError:
+                button = self.create_emoji_button(fallbacks[index])
+            button.grid(row = index // 4,
+                        column = index % 4,
+                        padx = 3,
+                        pady = 3)
+
+    def create_emoji_button(self, emoji):
+        return Button(self.emojiPanel,
+                      text = emoji,
+                      font = ("Segoe UI Emoji", 12),
+                      bg = "#F2F3F5",
+                      fg = "#111111",
+                      activebackground = "#E5E7EB",
+                      relief = FLAT,
+                      width = 3,
+                      command = lambda value = emoji: self.insert_emoji(value))
+
+    def toggle_emoji_panel(self):
+        if self.emojiPanel is None:
+            messagebox.showinfo("Emoji", "Emoji panel is not available on this system.")
+            return
+
+        if self.emoji_panel_visible == True:
+            self.emojiPanel.pack_forget()
+            self.emoji_panel_visible = False
+        else:
+            self.emojiPanel.pack(side = BOTTOM,
+                                 fill = X,
+                                 padx = 14,
+                                 pady = (0, 8))
+            self.emoji_panel_visible = True
+
+    def insert_emoji(self, emoji):
+        self.entryMsg.insert(INSERT, emoji)
+        self.entryMsg.focus()
+
     def update_sidebar(self):
         if self.sm.get_state() == S_CHATTING and len(self.sm.peer) > 0:
             peer = self.sm.peer
@@ -372,19 +451,12 @@ class GUI:
         self.chatInfo.config(text = info_text)
 
     def send_quick_command(self, command):
-        if self.can_use_menu_command() == False:
-            return
         self.sendButton(command)
 
     def can_use_menu_command(self):
-        if self.sm.get_state() == S_CHATTING:
-            messagebox.showinfo("Command", "Use this command before connecting, or type bye to leave the chat first.")
-            return False
         return True
 
     def ask_connect(self):
-        if self.can_use_menu_command() == False:
-            return
         peer = simpledialog.askstring("Connect", "Enter username:", parent = self.Window)
         if peer is not None and len(peer.strip()) > 0:
             self.sendButton("c " + peer.strip())
@@ -480,6 +552,12 @@ class GUI:
         if self.sm.get_state() != S_CHATTING:
             return False
         if msg == "bye":
+            return False
+        if msg == "time":
+            return False
+        if msg == "who":
+            return False
+        if msg[0] == "c":
             return False
         if msg[0] == "?":
             return False

@@ -126,6 +126,22 @@ class ClientSM:
                     self.disconnect()
                     self.state = S_LOGGEDIN
                     self.peer = ''
+                elif my_msg == 'time':
+                    mysend(self.s, json.dumps({"action":"time"}))
+                    time_in = json.loads(myrecv(self.s))["results"]
+                    self.out_msg += "Time is: " + time_in
+                elif my_msg == 'who':
+                    mysend(self.s, json.dumps({"action":"list"}))
+                    logged_in = json.loads(myrecv(self.s))["results"]
+                    self.out_msg += 'Here are all the users in the system:\n'
+                    self.out_msg += logged_in
+                elif my_msg[0] == 'c':
+                    peer = my_msg[1:].strip()
+                    if self.connect_to(peer) == True:
+                        self.out_msg += 'Connect to ' + peer + '. Chat away!\n\n'
+                        self.out_msg += '-----------------------------------\n'
+                    else:
+                        self.out_msg += 'Connection unsuccessful\n'
                 elif my_msg[0] == '?':
                     term = my_msg[1:].strip()
                     mysend(self.s, json.dumps({"action":"search", "target":term}))

@@ -106,12 +106,18 @@ class Server:
                 # connect to the peer
                 elif self.group.is_member(to_name):
                     to_sock = self.logged_name2sock[to_name]
+                    from_was_in_group, _ = self.group.find_group(from_name)
+                    peer_was_in_group, _ = self.group.find_group(to_name)
                     self.group.connect(from_name, to_name)
                     the_guys = self.group.list_me(from_name)
                     msg = json.dumps({"action":"connect", "status":"success"})
                     for g in the_guys[1:]:
                         to_sock = self.logged_name2sock[g]
-                        mysend(to_sock, json.dumps({"action":"connect", "status":"request", "from":from_name}))
+                        if from_was_in_group == True and peer_was_in_group == False and g != to_name:
+                            joined_name = to_name
+                        else:
+                            joined_name = from_name
+                        mysend(to_sock, json.dumps({"action":"connect", "status":"request", "from":joined_name}))
                 else:
                     msg = json.dumps({"action":"connect", "status":"no-user"})
                 mysend(from_sock, msg)

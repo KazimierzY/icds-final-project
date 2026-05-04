@@ -51,12 +51,26 @@ class Group:
         return found, group_key
 
     def connect(self, me, peer):
-        peer_in_group = False
-        #if peer is in a group, join it
+        me_in_group, me_group_key = self.find_group(me)
         peer_in_group, group_key = self.find_group(peer)
+
+        if me_in_group == True and peer_in_group == False:
+            print(me, "is talking already, invite", peer)
+            self.chat_grps[me_group_key].append(peer)
+            self.members[peer] = S_TALKING
+            print(self.list_me(me))
+            return
+
+        if me_in_group == True and peer_in_group == True and me_group_key == group_key:
+            print(me, "and", peer, "are already in the same group")
+            print(self.list_me(me))
+            return
+
+        #if peer is in a group, join it
         if peer_in_group == True:
             print(peer, "is talking already, connect!")
-            self.chat_grps[group_key].append(me)
+            if me not in self.chat_grps[group_key]:
+                self.chat_grps[group_key].append(me)
             self.members[me] = S_TALKING
         else:
             # otherwise, create a new group
