@@ -93,7 +93,7 @@ class ClientSM:
                     else:
                         self.out_msg += '\'' + term + '\'' + ' not found\n\n'
 
-                elif my_msg[0] == 'p' and my_msg[1:].isdigit():
+                elif my_msg[0] == 'p' and my_msg[1:].strip().isdigit():
                     poem_idx = my_msg[1:].strip()
                     mysend(self.s, json.dumps({"action":"poem", "target":poem_idx}))
                     poem = json.loads(myrecv(self.s))["results"]
