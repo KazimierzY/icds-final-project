@@ -13,6 +13,7 @@ from queue import Empty, Queue
 from tkinter import *
 from tkinter import font
 from tkinter import messagebox
+from tkinter import simpledialog
 from tkinter import ttk
 from chat_utils import *
 import json
@@ -122,41 +123,138 @@ class GUI:
         self.Window.title("CHATROOM")
         self.Window.resizable(width = False,
                               height = False)
-        self.Window.configure(width = 470,
-                              height = 550,
-                              bg = "#17202A")
-        self.labelHead = Label(self.Window,
-                             bg = "#17202A", 
-                              fg = "#EAECEE",
-                              text = self.name ,
-                               font = "Helvetica 13 bold",
-                               pady = 5)
-          
-        self.labelHead.place(relwidth = 1)
-        self.line = Label(self.Window,
-                          width = 450,
-                          bg = "#ABB2B9")
-          
-        self.line.place(relwidth = 1,
-                        rely = 0.07,
-                        relheight = 0.012)
-          
+        self.Window.geometry("780x560")
+        self.Window.configure(bg = "#F5F5F5")
+
+        self.headerFrame = Frame(self.Window,
+                                 bg = "#07C160",
+                                 height = 44)
+        self.headerFrame.pack(side = TOP,
+                              fill = X)
+        self.headerFrame.pack_propagate(False)
+
+        self.labelHead = Label(self.headerFrame,
+                               bg = "#07C160",
+                               fg = "#FFFFFF",
+                               text = "Chatroom",
+                               font = "Helvetica 14 bold",
+                               anchor = W,
+                               padx = 16)
+        self.labelHead.pack(side = LEFT,
+                            fill = BOTH,
+                            expand = True)
+
+        self.mainFrame = Frame(self.Window,
+                               bg = "#F5F5F5")
+        self.mainFrame.pack(side = TOP,
+                            fill = BOTH,
+                            expand = True)
+
+        self.sidebar = Frame(self.mainFrame,
+                             bg = "#FFFFFF",
+                             width = 220)
+        self.sidebar.pack(side = LEFT,
+                          fill = Y)
+        self.sidebar.pack_propagate(False)
+
+        self.profileTitle = Label(self.sidebar,
+                                  text = "My Profile",
+                                  bg = "#FFFFFF",
+                                  fg = "#222222",
+                                  font = "Helvetica 12 bold",
+                                  anchor = W)
+        self.profileTitle.pack(fill = X,
+                               padx = 16,
+                               pady = (18, 6))
+
+        self.nameLabel = Label(self.sidebar,
+                               text = "User: " + self.name,
+                               bg = "#FFFFFF",
+                               fg = "#333333",
+                               font = "Helvetica 10",
+                               anchor = W)
+        self.nameLabel.pack(fill = X,
+                            padx = 16,
+                            pady = 3)
+
+        self.stateLabel = Label(self.sidebar,
+                                text = "Status: Online",
+                                bg = "#FFFFFF",
+                                fg = "#333333",
+                                font = "Helvetica 10",
+                                anchor = W)
+        self.stateLabel.pack(fill = X,
+                             padx = 16,
+                             pady = 3)
+
+        self.peerLabel = Label(self.sidebar,
+                               text = "Chatting with: None",
+                               bg = "#FFFFFF",
+                               fg = "#333333",
+                               font = "Helvetica 10",
+                               anchor = W,
+                               wraplength = 180,
+                               justify = LEFT)
+        self.peerLabel.pack(fill = X,
+                            padx = 16,
+                            pady = 3)
+
+        self.actionTitle = Label(self.sidebar,
+                                 text = "Actions",
+                                 bg = "#FFFFFF",
+                                 fg = "#222222",
+                                 font = "Helvetica 12 bold",
+                                 anchor = W)
+        self.actionTitle.pack(fill = X,
+                              padx = 16,
+                              pady = (24, 8))
+
+        self.add_sidebar_button("Time", lambda: self.send_quick_command("time"))
+        self.add_sidebar_button("Who", lambda: self.send_quick_command("who"))
+        self.add_sidebar_button("Connect", self.ask_connect)
+        self.add_sidebar_button("Poem", self.ask_poem)
+        self.add_sidebar_button("Search", self.ask_search)
+        self.add_sidebar_button("Clear Chat", self.clear_chat)
+
+        self.rightPanel = Frame(self.mainFrame,
+                                bg = "#F5F5F5")
+        self.rightPanel.pack(side = LEFT,
+                             fill = BOTH,
+                             expand = True)
+
+        self.chatInfo = Label(self.rightPanel,
+                              text = "No active chat",
+                              bg = "#F5F5F5",
+                              fg = "#555555",
+                              font = "Helvetica 11 bold",
+                              anchor = W,
+                              padx = 16)
+        self.chatInfo.pack(side = TOP,
+                           fill = X,
+                           pady = (12, 8))
+
         # Window area for displaying chat and system messages.
-        self.messageFrame = Frame(self.Window,
-                                  bg = "#17202A")
-        self.messageFrame.place(relheight = 0.745,
-                                relwidth = 1,
-                                rely = 0.08)
+        self.messageFrame = Frame(self.rightPanel,
+                                  bg = "#FFFFFF",
+                                  bd = 1,
+                                  relief = SOLID)
+        self.messageFrame.pack(side = TOP,
+                               fill = BOTH,
+                               expand = True,
+                               padx = 14,
+                               pady = (0, 10))
 
         self.textCons = Text(self.messageFrame,
                              width = 20,
                              height = 2,
-                             bg = "#17202A",
-                             fg = "#EAECEE",
-                             font = "Helvetica 14",
-                             padx = 8,
-                             pady = 8,
+                             bg = "#FFFFFF",
+                             fg = "#111111",
+                             font = "Helvetica 11",
+                             padx = 14,
+                             pady = 12,
                              wrap = WORD,
+                             bd = 0,
+                             relief = FLAT,
                              state = DISABLED)
 
         self.textCons.pack(side = LEFT,
@@ -168,28 +266,55 @@ class GUI:
         scrollbar.pack(side = RIGHT,
                        fill = Y)
         self.textCons.config(yscrollcommand = scrollbar.set)
-        self.textCons.tag_config("system", foreground = "#F1C40F")
-        self.textCons.tag_config("me", foreground = "#82E0AA")
-        self.textCons.tag_config("peer", foreground = "#85C1E9")
+        self.textCons.tag_config("system",
+                                 foreground = "#888888",
+                                 justify = CENTER,
+                                 spacing1 = 4,
+                                 spacing3 = 4)
+        self.textCons.tag_config("me",
+                                 foreground = "#111111",
+                                 background = "#B7E6B7",
+                                 justify = RIGHT,
+                                 rmargin = 12,
+                                 lmargin1 = 120,
+                                 lmargin2 = 120,
+                                 spacing1 = 6,
+                                 spacing3 = 6)
+        self.textCons.tag_config("peer",
+                                 foreground = "#111111",
+                                 background = "#EAF2FF",
+                                 justify = LEFT,
+                                 lmargin1 = 12,
+                                 lmargin2 = 12,
+                                 rmargin = 120,
+                                 spacing1 = 6,
+                                 spacing3 = 6)
           
-        self.labelBottom = Label(self.Window,
-                                 bg = "#ABB2B9",
-                                 height = 80)
+        self.labelBottom = Frame(self.rightPanel,
+                                 bg = "#F5F5F5",
+                                 height = 64)
           
-        self.labelBottom.place(relwidth = 1,
-                               rely = 0.825)
+        self.labelBottom.pack(side = BOTTOM,
+                              fill = X,
+                              padx = 14,
+                              pady = (0, 14))
+        self.labelBottom.pack_propagate(False)
           
         self.entryMsg = Entry(self.labelBottom,
-                              bg = "#2C3E50",
-                              fg = "#EAECEE",
-                              font = "Helvetica 13")
+                              bg = "#FFFFFF",
+                              fg = "#111111",
+                              insertbackground = "#111111",
+                              font = "Helvetica 12",
+                              relief = SOLID,
+                              bd = 1)
           
         # place the given widget
         # into the gui window
-        self.entryMsg.place(relwidth = 0.74,
-                            relheight = 0.06,
-                            rely = 0.008,
-                            relx = 0.011)
+        self.entryMsg.pack(side = LEFT,
+                           fill = BOTH,
+                           expand = True,
+                           padx = (0, 10),
+                           pady = 10)
           
         self.entryMsg.focus()
         self.entryMsg.bind("<Return>", lambda event: self.sendButton(self.entryMsg.get()))
@@ -197,18 +322,90 @@ class GUI:
         # create a Send Button
         self.buttonMsg = Button(self.labelBottom,
                                 text = "Send",
-                                font = "Helvetica 10 bold", 
-                                width = 20,
-                                bg = "#ABB2B9",
+                                font = "Helvetica 10 bold",
+                                width = 10,
+                                bg = "#07C160",
+                                fg = "#FFFFFF",
+                                activebackground = "#06AD56",
+                                activeforeground = "#FFFFFF",
+                                relief = FLAT,
                                 command = lambda : self.sendButton(self.entryMsg.get()))
           
-        self.buttonMsg.place(relx = 0.77,
-                             rely = 0.008,
-                             relheight = 0.06, 
-                             relwidth = 0.22)
+        self.buttonMsg.pack(side = RIGHT,
+                            fill = Y,
+                            pady = 10)
           
         self.textCons.config(cursor = "arrow")
           
+        self.textCons.config(state = DISABLED)
+        self.update_sidebar()
+
+    def add_sidebar_button(self, text, command):
+        button = Button(self.sidebar,
+                        text = text,
+                        font = "Helvetica 10",
+                        bg = "#F2F3F5",
+                        fg = "#222222",
+                        activebackground = "#E5E7EB",
+                        activeforeground = "#111111",
+                        relief = FLAT,
+                        anchor = W,
+                        padx = 12,
+                        command = command)
+        button.pack(fill = X,
+                    padx = 16,
+                    pady = 4)
+
+    def update_sidebar(self):
+        if self.sm.get_state() == S_CHATTING and len(self.sm.peer) > 0:
+            peer = self.sm.peer
+            status = "Chatting"
+            chat_text = "Chatting with: " + peer
+            info_text = "Chatting with " + peer
+        else:
+            status = "Online"
+            chat_text = "Chatting with: None"
+            info_text = "No active chat"
+
+        self.stateLabel.config(text = "Status: " + status)
+        self.peerLabel.config(text = chat_text)
+        self.chatInfo.config(text = info_text)
+
+    def send_quick_command(self, command):
+        if self.can_use_menu_command() == False:
+            return
+        self.sendButton(command)
+
+    def can_use_menu_command(self):
+        if self.sm.get_state() == S_CHATTING:
+            messagebox.showinfo("Command", "Use this command before connecting, or type bye to leave the chat first.")
+            return False
+        return True
+
+    def ask_connect(self):
+        if self.can_use_menu_command() == False:
+            return
+        peer = simpledialog.askstring("Connect", "Enter username:", parent = self.Window)
+        if peer is not None and len(peer.strip()) > 0:
+            self.sendButton("c " + peer.strip())
+
+    def ask_poem(self):
+        if self.can_use_menu_command() == False:
+            return
+        poem_idx = simpledialog.askstring("Poem", "Enter sonnet number:", parent = self.Window)
+        if poem_idx is not None and len(poem_idx.strip()) > 0:
+            self.sendButton("p " + poem_idx.strip())
+
+    def ask_search(self):
+        if self.can_use_menu_command() == False:
+            return
+        term = simpledialog.askstring("Search", "Enter search term:", parent = self.Window)
+        if term is not None and len(term.strip()) > 0:
+            self.sendButton("? " + term.strip())
+
+    def clear_chat(self):
+        self.textCons.config(state = NORMAL)
+        self.textCons.delete("1.0", END)
         self.textCons.config(state = DISABLED)
 
     def display_message(self, msg, tag = "system"):
@@ -240,6 +437,7 @@ class GUI:
             self.display_chat_message(sender, body, "peer")
         else:
             self.display_system_message(msg)
+        self.update_sidebar()
 
     def parse_peer_message(self, msg):
         if msg.startswith("[") and "]" in msg:
@@ -278,6 +476,7 @@ class GUI:
             self.display_chat_message("Me", msg, "me")
 
         self.outgoing_msgs.put(msg)
+        self.update_sidebar()
         # print(msg)
         self.entryMsg.delete(0, END)
 
