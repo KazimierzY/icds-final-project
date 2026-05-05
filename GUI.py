@@ -46,6 +46,8 @@ class GUI:
         self.bot = None
         self.bot_name = "AI_Bot"
         self.bot_personality = "friendly Python learning assistant"
+        self.bot_chat_active = False
+        self.chatbotButton = None
 
     def login(self):
         # login window
@@ -225,8 +227,6 @@ class GUI:
         self.add_sidebar_button("Connect", self.ask_connect)
         self.add_sidebar_button("Poem", self.ask_poem)
         self.add_sidebar_button("Search", self.ask_search)
-        self.add_sidebar_button("ChatBot", self.ask_chatbot)
-        self.add_sidebar_button("Bot Personality", self.ask_bot_personality)
         self.add_sidebar_button("Clear Chat", self.clear_chat)
 
         self.rightPanel = Frame(self.mainFrame,
@@ -235,16 +235,52 @@ class GUI:
                              fill = BOTH,
                              expand = True)
 
-        self.chatInfo = Label(self.rightPanel,
+        self.chatHeader = Frame(self.rightPanel,
+                                bg = "#F5F5F5",
+                                height = 44)
+        self.chatHeader.pack(side = TOP,
+                             fill = X,
+                             padx = 14,
+                             pady = (10, 8))
+        self.chatHeader.pack_propagate(False)
+
+        self.chatInfo = Label(self.chatHeader,
                               text = "No active chat",
                               bg = "#F5F5F5",
                               fg = "#555555",
                               font = "Helvetica 11 bold",
-                              anchor = W,
-                              padx = 16)
-        self.chatInfo.pack(side = TOP,
-                           fill = X,
-                           pady = (12, 8))
+                              anchor = W)
+        self.chatInfo.pack(side = LEFT,
+                           fill = BOTH,
+                           expand = True)
+
+        self.botStyleButton = Button(self.chatHeader,
+                                     text = "Bot Style",
+                                     font = "Helvetica 9",
+                                     width = 9,
+                                     bg = "#E8ECEF",
+                                     fg = "#222222",
+                                     activebackground = "#D9DEE3",
+                                     activeforeground = "#111111",
+                                     relief = FLAT,
+                                     command = self.ask_bot_personality)
+        self.botStyleButton.pack(side = RIGHT,
+                                 padx = (6, 0),
+                                 pady = 7)
+
+        self.chatbotButton = Button(self.chatHeader,
+                                    text = "Bot",
+                                    font = "Helvetica 9 bold",
+                                    width = 7,
+                                    bg = "#FFE7A3",
+                                    fg = "#222222",
+                                    activebackground = "#FFD980",
+                                    activeforeground = "#111111",
+                                    relief = FLAT,
+                                    command = self.ask_chatbot)
+        self.chatbotButton.pack(side = RIGHT,
+                                padx = (6, 0),
+                                pady = 7)
 
         # Window area for displaying chat and system messages.
         self.messageFrame = Frame(self.rightPanel,
@@ -412,6 +448,7 @@ class GUI:
         button.pack(fill = X,
                     padx = 16,
                     pady = 4)
+        return button
 
     def add_emoji_panel(self):
         self.emojiPanel = Frame(self.rightPanel,
@@ -499,7 +536,11 @@ class GUI:
         self.entryMsg.focus()
 
     def update_sidebar(self):
-        if self.sm.get_state() == S_CHATTING and len(self.sm.peer) > 0:
+        if self.bot_chat_active == True:
+            status = "ChatBot"
+            chat_text = "Chatting with: " + self.bot_name
+            info_text = "ChatBot mode: " + self.bot_name
+        elif self.sm.get_state() == S_CHATTING and len(self.sm.peer) > 0:
             peer = self.sm.peer
             status = "Chatting"
             chat_text = "Chatting with: " + peer
@@ -514,6 +555,8 @@ class GUI:
         self.chatInfo.config(text = info_text)
 
     def send_quick_command(self, command):
+        if self.bot_chat_active == True:
+            self.exit_bot_chat()
         self.sendButton(command)
 
     def can_use_menu_command(self):
@@ -522,22 +565,29 @@ class GUI:
     def ask_connect(self):
         peer = simpledialog.askstring("Connect", "Enter username:", parent = self.Window)
         if peer is not None and len(peer.strip()) > 0:
+            if self.bot_chat_active == True:
+                self.exit_bot_chat()
             self.sendButton("c " + peer.strip())
 
     def ask_poem(self):
         poem_idx = simpledialog.askstring("Poem", "Enter sonnet number:", parent = self.Window)
         if poem_idx is not None and len(poem_idx.strip()) > 0:
+            if self.bot_chat_active == True:
+                self.exit_bot_chat()
             self.sendButton("p " + poem_idx.strip())
 
     def ask_search(self):
         term = simpledialog.askstring("Search", "Enter search term:", parent = self.Window)
         if term is not None and len(term.strip()) > 0:
+            if self.bot_chat_active == True:
+                self.exit_bot_chat()
             self.sendButton("? " + term.strip())
 
     def ask_chatbot(self):
-        prompt = simpledialog.askstring("ChatBot", "Ask AI_Bot:", parent = self.Window)
-        if prompt is not None and len(prompt.strip()) > 0:
-            self.submit_bot_message(prompt.strip(), show_prefix = False)
+        if self.bot_chat_active == True:
+            self.exit_bot_chat()
+        else:
+            self.enter_bot_chat()
 
     def ask_bot_personality(self):
         personality = simpledialog.askstring(
@@ -662,6 +712,14 @@ class GUI:
             self.entryMsg.delete(0, END)
             return
 
+        if self.bot_chat_active == True:
+            if msg.lower() == "/exit":
+                self.exit_bot_chat()
+            else:
+                self.submit_bot_message(msg, show_prefix = False)
+            self.entryMsg.delete(0, END)
+            return
+
         if self.should_display_as_chat_message(msg):
             self.display_chat_message("Me", msg, "me")
 
@@ -688,6 +746,26 @@ class GUI:
         thread = threading.Thread(target = self.call_bot, args = (prompt,))
         thread.daemon = True
         thread.start()
+
+    def enter_bot_chat(self):
+        try:
+            self.ensure_bot()
+            self.bot_chat_active = True
+            if self.chatbotButton is not None:
+                self.chatbotButton.config(text = "Exit")
+            self.display_system_message("ChatBot mode started.")
+            self.update_sidebar()
+            self.entryMsg.focus()
+        except Exception as exc:
+            self.display_system_message("AI_Bot error: " + str(exc))
+
+    def exit_bot_chat(self):
+        self.bot_chat_active = False
+        if self.chatbotButton is not None:
+            self.chatbotButton.config(text = "Bot")
+        self.display_system_message("ChatBot mode ended.")
+        self.update_sidebar()
+        self.entryMsg.focus()
 
     def ensure_bot(self):
         if self.bot is None:
