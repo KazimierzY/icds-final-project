@@ -48,6 +48,7 @@ class GUI:
         self.bot_personality = "friendly Python learning assistant"
         self.bot_chat_active = False
         self.chatbotButton = None
+        self.group_bot_invited = False
 
     def login(self):
         # login window
@@ -703,7 +704,16 @@ class GUI:
         if len(msg) == 0:
             return
 
-        if self.is_bot_command(msg):
+        if self.bot_chat_active == True:
+            if msg.lower() == "/exit":
+                self.exit_bot_chat()
+            else:
+                prompt = self.extract_bot_prompt(msg) if self.is_bot_command(msg) else msg
+                self.submit_bot_message(prompt, show_prefix = False)
+            self.entryMsg.delete(0, END)
+            return
+
+        if self.is_bot_command(msg) and self.sm.get_state() != S_CHATTING:
             prompt = self.extract_bot_prompt(msg)
             if len(prompt) == 0:
                 self.display_system_message("Type a question after @bot.")
@@ -712,13 +722,18 @@ class GUI:
             self.entryMsg.delete(0, END)
             return
 
-        if self.bot_chat_active == True:
-            if msg.lower() == "/exit":
-                self.exit_bot_chat()
-            else:
-                self.submit_bot_message(msg, show_prefix = False)
+        if self.is_bot_command(msg) and self.sm.get_state() == S_CHATTING:
+            self.display_chat_message("Me", msg, "me")
+            if self.group_bot_invited == False and self.sm.peer != self.bot_name:
+                self.outgoing_msgs.put("c " + self.bot_name)
+                self.group_bot_invited = True
+            self.outgoing_msgs.put(msg)
+            self.update_sidebar()
             self.entryMsg.delete(0, END)
             return
+
+        if msg == "bye":
+            self.group_bot_invited = False
 
         if self.should_display_as_chat_message(msg):
             self.display_chat_message("Me", msg, "me")
