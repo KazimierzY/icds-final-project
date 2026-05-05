@@ -691,8 +691,8 @@ class GUI:
 
     def ensure_bot(self):
         if self.bot is None:
-            from chat_bot_client import ChatBotClientOpenAI
-            self.bot = ChatBotClientOpenAI(
+            from chat_bot_client import ChatBotClient
+            self.bot = ChatBotClient(
                 name = self.bot_name,
                 personality = self.bot_personality
             )

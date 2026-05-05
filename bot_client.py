@@ -4,7 +4,7 @@ import select
 import socket
 import time
 
-from chat_bot_client import ChatBotClientOpenAI
+from chat_bot_client import ChatBotClient
 from chat_utils import CHAT_PORT, SERVER, myrecv, mysend
 
 
@@ -14,7 +14,7 @@ class GroupChatBotClient:
         self.name = name
         self.personality = personality
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.bot = ChatBotClientOpenAI(name=self.name, personality=self.personality)
+        self.bot = ChatBotClient(name=self.name, personality=self.personality)
         self.group_history = []
         self.running = False
 
