@@ -21,6 +21,9 @@ from tkinter import ttk
 from chat_utils import *
 import json
 
+BOT_UI_PREFIX = "__chatbot_reply__:"
+BOT_ERROR_PREFIX = "__chatbot_error__:"
+
 # GUI class for the chat
 class GUI:
     # constructor method
@@ -40,6 +43,9 @@ class GUI:
         self.process = None
         self.polling_ui = False
         self.emoji_panel_visible = False
+        self.bot = None
+        self.bot_name = "AI_Bot"
+        self.bot_personality = "friendly Python learning assistant"
 
     def login(self):
         # login window
@@ -219,6 +225,8 @@ class GUI:
         self.add_sidebar_button("Connect", self.ask_connect)
         self.add_sidebar_button("Poem", self.ask_poem)
         self.add_sidebar_button("Search", self.ask_search)
+        self.add_sidebar_button("ChatBot", self.ask_chatbot)
+        self.add_sidebar_button("Bot Personality", self.ask_bot_personality)
         self.add_sidebar_button("Clear Chat", self.clear_chat)
 
         self.rightPanel = Frame(self.mainFrame,
@@ -288,6 +296,15 @@ class GUI:
         self.textCons.tag_config("peer",
                                  foreground = "#111111",
                                  background = "#EAF2FF",
+                                 justify = LEFT,
+                                 lmargin1 = 12,
+                                 lmargin2 = 12,
+                                 rmargin = 120,
+                                 spacing1 = 6,
+                                 spacing3 = 6)
+        self.textCons.tag_config("bot",
+                                 foreground = "#111111",
+                                 background = "#FFF4D6",
                                  justify = LEFT,
                                  lmargin1 = 12,
                                  lmargin2 = 12,
@@ -517,6 +534,24 @@ class GUI:
         if term is not None and len(term.strip()) > 0:
             self.sendButton("? " + term.strip())
 
+    def ask_chatbot(self):
+        prompt = simpledialog.askstring("ChatBot", "Ask AI_Bot:", parent = self.Window)
+        if prompt is not None and len(prompt.strip()) > 0:
+            self.submit_bot_message(prompt.strip(), show_prefix = False)
+
+    def ask_bot_personality(self):
+        personality = simpledialog.askstring(
+            "Bot Personality",
+            "Describe AI_Bot's personality:",
+            initialvalue = self.bot_personality,
+            parent = self.Window
+        )
+        if personality is not None and len(personality.strip()) > 0:
+            self.bot_personality = personality.strip()
+            if self.bot is not None:
+                self.bot.set_personality(self.bot_personality)
+            self.display_system_message("AI_Bot personality set to: " + self.bot_personality)
+
     def clear_chat(self):
         self.textCons.config(state = NORMAL)
         self.textCons.delete("1.0", END)
@@ -544,6 +579,16 @@ class GUI:
     def display_state_output(self, msg):
         msg = msg.strip()
         if len(msg) == 0:
+            return
+
+        if msg.startswith(BOT_UI_PREFIX):
+            self.display_chat_message(self.bot_name, msg[len(BOT_UI_PREFIX):], "bot")
+            self.update_sidebar()
+            return
+
+        if msg.startswith(BOT_ERROR_PREFIX):
+            self.display_system_message(msg[len(BOT_ERROR_PREFIX):])
+            self.update_sidebar()
             return
 
         if msg.startswith(FILE_RECV_PREFIX):
@@ -608,6 +653,15 @@ class GUI:
         if len(msg) == 0:
             return
 
+        if self.is_bot_command(msg):
+            prompt = self.extract_bot_prompt(msg)
+            if len(prompt) == 0:
+                self.display_system_message("Type a question after @bot.")
+            else:
+                self.submit_bot_message(prompt, show_prefix = True)
+            self.entryMsg.delete(0, END)
+            return
+
         if self.should_display_as_chat_message(msg):
             self.display_chat_message("Me", msg, "me")
 
@@ -615,6 +669,42 @@ class GUI:
         self.update_sidebar()
         # print(msg)
         self.entryMsg.delete(0, END)
+
+    def is_bot_command(self, msg):
+        msg_lower = msg.lower()
+        return msg_lower.startswith("@bot") or msg_lower.startswith("/bot")
+
+    def extract_bot_prompt(self, msg):
+        if msg.lower().startswith("@bot"):
+            return msg[4:].strip(" :")
+        if msg.lower().startswith("/bot"):
+            return msg[4:].strip(" :")
+        return msg.strip()
+
+    def submit_bot_message(self, prompt, show_prefix):
+        shown_prompt = "@bot " + prompt if show_prefix == True else prompt
+        self.display_chat_message("Me", shown_prompt, "me")
+        self.display_system_message("AI_Bot is thinking...")
+        thread = threading.Thread(target = self.call_bot, args = (prompt,))
+        thread.daemon = True
+        thread.start()
+
+    def ensure_bot(self):
+        if self.bot is None:
+            from chat_bot_client import ChatBotClientOpenAI
+            self.bot = ChatBotClientOpenAI(
+                name = self.bot_name,
+                personality = self.bot_personality
+            )
+        return self.bot
+
+    def call_bot(self, prompt):
+        try:
+            bot = self.ensure_bot()
+            reply = bot.ask(prompt)
+            self.ui_msgs.put(BOT_UI_PREFIX + reply)
+        except Exception as exc:
+            self.ui_msgs.put(BOT_ERROR_PREFIX + "AI_Bot error: " + str(exc))
 
     def should_display_as_chat_message(self, msg):
         if self.sm.get_state() != S_CHATTING:
