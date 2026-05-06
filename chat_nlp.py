@@ -100,9 +100,58 @@ def ask_deepseek(task, messages, limit = 30):
     return response.choices[0].message.content.strip()
 
 
+def ask_deepseek_for_text(system_prompt, user_prompt):
+    client = deepseek_client()
+    model = os.environ.get("DEEPSEEK_MODEL", DEFAULT_DEEPSEEK_MODEL)
+    response = client.chat.completions.create(
+        model = model,
+        messages = [
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user",
+                "content": user_prompt
+            }
+        ],
+        temperature = 0
+    )
+    return response.choices[0].message.content.strip()
+
+
 def extract_keywords(messages, limit = 30, top_k = 8):
     return ask_deepseek("keywords", messages, limit)
 
 
 def summarize_recent_chat(messages, limit = 30):
     return ask_deepseek("summary", messages, limit)
+
+
+def analyze_sentiment(text):
+    text = text.strip()
+    if len(text) == 0:
+        return "Neutral"
+
+    result = ask_deepseek_for_text(
+        "You are a sentiment detector for chat messages. "
+        "Classify the message as Positive, Neutral, or Negative. "
+        "You may add one short emotion word after a dash, such as Happy, Angry, or Sad. "
+        "Return only this format: Positive - Happy, Neutral - Calm, or Negative - Angry.",
+        "Message:\n" + text
+    )
+    result = result.replace("\n", " ").strip()
+
+    lowered = result.lower()
+    if "positive" in lowered:
+        label = "Positive"
+    elif "negative" in lowered:
+        label = "Negative"
+    else:
+        label = "Neutral"
+
+    if "-" in result:
+        emotion = result.split("-", 1)[1].strip(" .")
+        if len(emotion) > 0:
+            return label + " - " + emotion[:30]
+    return label

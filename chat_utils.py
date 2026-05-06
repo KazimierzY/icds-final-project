@@ -23,6 +23,7 @@ menu = "\n++++ Choose one of the following commands\n \
         /aipic: _prompt_: generate an AI picture quickly\n \
         /summary: summarize recent chat messages\n \
         /keywords: extract recent chat keywords\n \
+        Sentiment: chat messages are analyzed as Positive, Neutral, or Negative\n \
         ? _term_: to search your chat logs where _term_ appears\n \
         p _#_: to get number <#> sonnet\n \
         q: to leave the chat system\n\n"

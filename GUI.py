@@ -27,6 +27,8 @@ AIPIC_UI_PREFIX = "__aipic_image__:"
 AIPIC_ERROR_PREFIX = "__aipic_error__:"
 NLP_UI_PREFIX = "__chat_nlp_reply__:"
 NLP_ERROR_PREFIX = "__chat_nlp_error__:"
+SENTIMENT_UI_PREFIX = "__sentiment_reply__:"
+SENTIMENT_ERROR_PREFIX = "__sentiment_error__:"
 
 # GUI class for the chat
 class GUI:
@@ -61,6 +63,7 @@ class GUI:
         self.tictactoe_room = ""
         self.chat_images = []
         self.chat_history = []
+        self.sentiment_enabled = True
         self.sidebar_groups = {}
         self.current_sidebar_body = None
 
@@ -377,6 +380,21 @@ class GUI:
                                  rmargin = 120,
                                  spacing1 = 6,
                                  spacing3 = 6)
+        self.textCons.tag_config("sentiment_positive",
+                                 foreground = "#1B7F3A",
+                                 justify = CENTER,
+                                 spacing1 = 2,
+                                 spacing3 = 4)
+        self.textCons.tag_config("sentiment_neutral",
+                                 foreground = "#666666",
+                                 justify = CENTER,
+                                 spacing1 = 2,
+                                 spacing3 = 4)
+        self.textCons.tag_config("sentiment_negative",
+                                 foreground = "#B3261E",
+                                 justify = CENTER,
+                                 spacing1 = 2,
+                                 spacing3 = 4)
           
         self.labelBottom = Frame(self.rightPanel,
                                  bg = "#F5F5F5",
@@ -898,6 +916,7 @@ class GUI:
         if len(msg) > 0:
             self.add_chat_history(sender, msg)
             self.display_message("[" + sender + "] " + msg, tag)
+            self.request_sentiment_analysis(sender, msg)
 
     def add_chat_history(self, sender, msg):
         msg = msg.strip()
@@ -908,6 +927,52 @@ class GUI:
             "text": msg
         })
         self.chat_history = self.chat_history[-100:]
+
+    def should_analyze_sentiment(self, sender, msg):
+        if self.sentiment_enabled != True:
+            return False
+        if sender == self.bot_name:
+            return False
+        if msg.startswith("[file]"):
+            return False
+        if msg.startswith("[System]"):
+            return False
+        return True
+
+    def request_sentiment_analysis(self, sender, msg):
+        if self.should_analyze_sentiment(sender, msg) == False:
+            return
+
+        thread = threading.Thread(target = self.call_sentiment, args = (sender, msg))
+        thread.daemon = True
+        thread.start()
+
+    def call_sentiment(self, sender, msg):
+        try:
+            from chat_nlp import analyze_sentiment
+            result = analyze_sentiment(msg)
+            payload = {
+                "sender": sender,
+                "result": result
+            }
+            self.ui_msgs.put(SENTIMENT_UI_PREFIX + json.dumps(payload))
+        except Exception as exc:
+            self.ui_msgs.put(SENTIMENT_ERROR_PREFIX + "Sentiment analysis error: " + str(exc))
+
+    def display_sentiment_result(self, sender, result):
+        result = result.strip()
+        if len(result) == 0:
+            return
+
+        result_lower = result.lower()
+        if "positive" in result_lower:
+            tag = "sentiment_positive"
+        elif "negative" in result_lower:
+            tag = "sentiment_negative"
+        else:
+            tag = "sentiment_neutral"
+
+        self.display_message("[Sentiment] " + sender + ": " + result, tag)
 
     def display_chat_image(self, sender, image_path, prompt):
         if not os.path.exists(image_path):
@@ -964,6 +1029,17 @@ class GUI:
 
         if msg.startswith(NLP_ERROR_PREFIX):
             self.display_system_message(msg[len(NLP_ERROR_PREFIX):])
+            self.update_sidebar()
+            return
+
+        if msg.startswith(SENTIMENT_UI_PREFIX):
+            payload = json.loads(msg[len(SENTIMENT_UI_PREFIX):])
+            self.display_sentiment_result(payload["sender"], payload["result"])
+            self.update_sidebar()
+            return
+
+        if msg.startswith(SENTIMENT_ERROR_PREFIX):
+            self.display_system_message(msg[len(SENTIMENT_ERROR_PREFIX):])
             self.update_sidebar()
             return
 
