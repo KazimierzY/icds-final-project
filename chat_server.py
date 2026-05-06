@@ -23,8 +23,9 @@ class Server:
         self.all_sockets = []
         self.group = grp.Group()
         self.scoreboards = {}
-        self.tictactoe_waiting = None
+        self.tictactoe_waiting = {}
         self.tictactoe_sessions = {}
+        self.tictactoe_rooms = {}
         #start server
         self.server=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind(SERVER)
@@ -91,6 +92,7 @@ class Server:
             "turn": session["turn"],
             "players": session["players"],
             "winner": session["winner"],
+            "room": session.get("room", ""),
             "message": message
         })
 
@@ -128,18 +130,29 @@ class Server:
             return "draw"
         return None
 
-    def start_tictactoe(self, sock):
+    def start_tictactoe(self, sock, room):
         name = self.logged_sock2name[sock]
+        room = str(room).strip()
+        if len(room) == 0:
+            room = "default"
+
         if name in self.tictactoe_sessions:
             self.send_tictactoe_state(name, "playing", "You are already in a Tic-Tac-Toe game.")
             return
 
-        if self.tictactoe_waiting == name:
-            self.send_tictactoe_error(sock, "Waiting for another player to join Tic-Tac-Toe.")
+        if room in self.tictactoe_rooms:
+            self.send_tictactoe_error(sock, "Room " + room + " already has a Tic-Tac-Toe game.")
             return
 
-        if self.tictactoe_waiting is None:
-            self.tictactoe_waiting = name
+        for waiting_room, waiting_name in list(self.tictactoe_waiting.items()):
+            if waiting_name == name:
+                if waiting_room == room:
+                    self.send_tictactoe_error(sock, "Waiting in room " + room + ".")
+                    return
+                del self.tictactoe_waiting[waiting_room]
+
+        if room not in self.tictactoe_waiting:
+            self.tictactoe_waiting[room] = name
             mysend(sock, json.dumps({
                 "action": "tictactoe_state",
                 "status": "waiting",
@@ -147,15 +160,20 @@ class Server:
                 "turn": "X",
                 "players": {"X": name, "O": ""},
                 "winner": None,
-                "message": "Waiting for another player..."
+                "room": room,
+                "message": "Waiting for another player in room " + room + "..."
             }))
             return
 
-        first_player = self.tictactoe_waiting
-        self.tictactoe_waiting = None
+        first_player = self.tictactoe_waiting[room]
+        if first_player == name:
+            self.send_tictactoe_error(sock, "Waiting in room " + room + ".")
+            return
+        del self.tictactoe_waiting[room]
         session = {
             "board": [""] * 9,
             "turn": "X",
+            "room": room,
             "players": {
                 "X": first_player,
                 "O": name
@@ -164,7 +182,8 @@ class Server:
         }
         self.tictactoe_sessions[first_player] = session
         self.tictactoe_sessions[name] = session
-        self.broadcast_tictactoe_state(session, "playing", "Tic-Tac-Toe game started.")
+        self.tictactoe_rooms[room] = session
+        self.broadcast_tictactoe_state(session, "playing", "Tic-Tac-Toe room " + room + " started.")
 
     def make_tictactoe_move(self, sock, position):
         name = self.logged_sock2name[sock]
@@ -213,6 +232,9 @@ class Server:
                 message = session["players"][session["winner"]] + " wins Tic-Tac-Toe!"
             players = list(session["players"].values())
             self.broadcast_tictactoe_state(session, status, message)
+            room = session.get("room")
+            if room in self.tictactoe_rooms:
+                del self.tictactoe_rooms[room]
             for player_name in players:
                 if player_name in self.tictactoe_sessions:
                     del self.tictactoe_sessions[player_name]
@@ -221,18 +243,23 @@ class Server:
         name = self.logged_sock2name.get(sock)
         if name is None:
             return
-        if self.tictactoe_waiting == name:
-            self.tictactoe_waiting = None
-            return
+        for room, waiting_name in list(self.tictactoe_waiting.items()):
+            if waiting_name == name:
+                del self.tictactoe_waiting[room]
+                return
         if name not in self.tictactoe_sessions:
             return
 
         session = self.tictactoe_sessions[name]
+        room = session.get("room")
         opponent = None
         for player_name in session["players"].values():
             if player_name != name:
                 opponent = player_name
                 break
+
+        if room in self.tictactoe_rooms:
+            del self.tictactoe_rooms[room]
 
         for player_name in list(session["players"].values()):
             if player_name in self.tictactoe_sessions:
@@ -243,7 +270,8 @@ class Server:
                 "board": session["board"],
                 "turn": session["turn"],
                 "players": session["players"],
-                "winner": None
+                "winner": None,
+                "room": session.get("room", "")
             }
             mysend(self.logged_name2sock[opponent], self.tictactoe_state_msg(
                 ended_session, "finished", name + " left Tic-Tac-Toe."))
@@ -385,7 +413,7 @@ class Server:
 # handle interactive Tic-Tac-Toe multiplayer game
 #==============================================================================
             elif msg["action"] == "tictactoe_start":
-                self.start_tictactoe(from_sock)
+                self.start_tictactoe(from_sock, msg.get("room", "default"))
 
             elif msg["action"] == "tictactoe_move":
                 self.make_tictactoe_move(from_sock, msg.get("position"))

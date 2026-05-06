@@ -75,9 +75,15 @@ class ClientSM:
         scores = msg.get("scores", [])
         self.out_msg += self.format_scoreboard(game, scores)
 
-    def start_tictactoe(self):
-        mysend(self.s, json.dumps({"action": "tictactoe_start"}))
-        self.out_msg += "Requested Tic-Tac-Toe game.\n"
+    def start_tictactoe(self, my_msg):
+        room = my_msg[len(TICTACTOE_START_PREFIX):].strip()
+        if len(room) == 0:
+            room = "default"
+        mysend(self.s, json.dumps({
+            "action": "tictactoe_start",
+            "room": room
+        }))
+        self.out_msg += "Requested Tic-Tac-Toe room " + room + ".\n"
 
     def send_tictactoe_move(self, my_msg):
         move_msg = json.loads(my_msg[len(TICTACTOE_MOVE_PREFIX):])
@@ -148,7 +154,7 @@ class ClientSM:
                     self.request_game_leaderboard(my_msg)
 
                 elif my_msg.startswith(TICTACTOE_START_PREFIX):
-                    self.start_tictactoe()
+                    self.start_tictactoe(my_msg)
 
                 elif my_msg.startswith(TICTACTOE_MOVE_PREFIX):
                     self.send_tictactoe_move(my_msg)
@@ -234,7 +240,7 @@ class ClientSM:
                 elif my_msg.startswith(GAME_LEADERBOARD_PREFIX):
                     self.request_game_leaderboard(my_msg)
                 elif my_msg.startswith(TICTACTOE_START_PREFIX):
-                    self.start_tictactoe()
+                    self.start_tictactoe(my_msg)
                 elif my_msg.startswith(TICTACTOE_MOVE_PREFIX):
                     self.send_tictactoe_move(my_msg)
                 elif my_msg.startswith(TICTACTOE_LEAVE_PREFIX):

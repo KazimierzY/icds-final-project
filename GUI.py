@@ -52,6 +52,7 @@ class GUI:
         self.group_bot_invited = False
         self.snake_game = None
         self.tictactoe_game = None
+        self.tictactoe_room = ""
         self.sidebar_groups = {}
         self.current_sidebar_body = None
 
@@ -664,6 +665,18 @@ class GUI:
         if self.bot_chat_active == True:
             self.exit_bot_chat()
 
+        room = simpledialog.askstring("Tic-Tac-Toe Room",
+                                      "Enter room number:",
+                                      initialvalue = self.tictactoe_room,
+                                      parent = self.Window)
+        if room is None:
+            return
+        room = room.strip()
+        if len(room) == 0:
+            messagebox.showwarning("Tic-Tac-Toe", "Please enter a room number.")
+            return
+        self.tictactoe_room = room
+
         try:
             from tictactoe_game import TicTacToeGame
             if self.tictactoe_game is None:
@@ -674,14 +687,24 @@ class GUI:
                     on_move = self.send_tictactoe_move,
                     on_leave = self.leave_tictactoe_game
                 )
+            self.tictactoe_game.set_room(self.tictactoe_room)
             self.tictactoe_game.start()
             self.request_tictactoe_start()
-            self.display_system_message("Tic-Tac-Toe matchmaking started.")
+            self.display_system_message("Tic-Tac-Toe room " + self.tictactoe_room + " matchmaking started.")
         except Exception as exc:
             self.display_system_message("Could not start Tic-Tac-Toe: " + str(exc))
 
     def request_tictactoe_start(self):
-        self.outgoing_msgs.put(TICTACTOE_START_PREFIX)
+        if len(self.tictactoe_room.strip()) == 0:
+            room = simpledialog.askstring("Tic-Tac-Toe Room",
+                                          "Enter room number:",
+                                          parent = self.Window)
+            if room is None or len(room.strip()) == 0:
+                return
+            self.tictactoe_room = room.strip()
+            if self.tictactoe_game is not None:
+                self.tictactoe_game.set_room(self.tictactoe_room)
+        self.outgoing_msgs.put(TICTACTOE_START_PREFIX + self.tictactoe_room)
 
     def send_tictactoe_move(self, position):
         payload = {
@@ -719,6 +742,10 @@ class GUI:
                     on_move = self.send_tictactoe_move,
                     on_leave = self.leave_tictactoe_game
                 )
+            room = event.get("room", "")
+            if len(room) > 0:
+                self.tictactoe_room = room
+                self.tictactoe_game.set_room(room)
             self.tictactoe_game.start()
             self.tictactoe_game.apply_state(event)
         except Exception as exc:

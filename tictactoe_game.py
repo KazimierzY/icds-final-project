@@ -20,6 +20,7 @@ class TicTacToeGame:
         self.status = "idle"
         self.winner = None
         self.my_symbol = None
+        self.room = ""
         self.close_notifies_server = True
 
     def start(self):
@@ -139,6 +140,10 @@ class TicTacToeGame:
         if self.on_start is not None:
             self.on_start()
 
+    def set_room(self, room):
+        self.room = str(room).strip()
+        self.refresh()
+
     def click_square(self, position):
         if self.status != "playing":
             return
@@ -155,6 +160,7 @@ class TicTacToeGame:
         self.turn = state.get("turn", "X")
         self.status = state.get("status", "playing")
         self.winner = state.get("winner")
+        self.room = state.get("room", self.room)
 
         self.my_symbol = None
         for symbol, name in self.players.items():
@@ -191,6 +197,8 @@ class TicTacToeGame:
             opponent = self.players.get(opponent_symbol, "")
             if len(opponent) > 0:
                 player_text += " vs " + opponent
+        if len(self.room) > 0:
+            player_text = "Room " + self.room + " | " + player_text
         self.info_label.config(text = player_text)
 
         if len(message) > 0:
