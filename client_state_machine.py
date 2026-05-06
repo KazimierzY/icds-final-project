@@ -75,6 +75,24 @@ class ClientSM:
         scores = msg.get("scores", [])
         self.out_msg += self.format_scoreboard(game, scores)
 
+    def start_tictactoe(self):
+        mysend(self.s, json.dumps({"action": "tictactoe_start"}))
+        self.out_msg += "Requested Tic-Tac-Toe game.\n"
+
+    def send_tictactoe_move(self, my_msg):
+        move_msg = json.loads(my_msg[len(TICTACTOE_MOVE_PREFIX):])
+        mysend(self.s, json.dumps({
+            "action": "tictactoe_move",
+            "position": move_msg.get("position")
+        }))
+
+    def leave_tictactoe(self):
+        mysend(self.s, json.dumps({"action": "tictactoe_leave"}))
+        self.out_msg += "Left Tic-Tac-Toe.\n"
+
+    def handle_tictactoe_event(self, msg):
+        self.out_msg += TICTACTOE_EVENT_PREFIX + json.dumps(msg)
+
     def format_scoreboard(self, game, scores):
         title = game.capitalize() + " Leaderboard"
         if len(scores) == 0:
@@ -91,6 +109,9 @@ class ClientSM:
     def handle_incoming_common(self, msg):
         if msg["action"] == "scoreboard":
             self.handle_scoreboard(msg)
+            return True
+        if msg["action"] == "tictactoe_state" or msg["action"] == "tictactoe_error":
+            self.handle_tictactoe_event(msg)
             return True
         return False
 
@@ -125,6 +146,15 @@ class ClientSM:
 
                 elif my_msg.startswith(GAME_LEADERBOARD_PREFIX):
                     self.request_game_leaderboard(my_msg)
+
+                elif my_msg.startswith(TICTACTOE_START_PREFIX):
+                    self.start_tictactoe()
+
+                elif my_msg.startswith(TICTACTOE_MOVE_PREFIX):
+                    self.send_tictactoe_move(my_msg)
+
+                elif my_msg.startswith(TICTACTOE_LEAVE_PREFIX):
+                    self.leave_tictactoe()
 
                 elif my_msg[0] == 'c':
                     peer = my_msg[1:]
@@ -203,6 +233,12 @@ class ClientSM:
                     self.submit_game_score(my_msg)
                 elif my_msg.startswith(GAME_LEADERBOARD_PREFIX):
                     self.request_game_leaderboard(my_msg)
+                elif my_msg.startswith(TICTACTOE_START_PREFIX):
+                    self.start_tictactoe()
+                elif my_msg.startswith(TICTACTOE_MOVE_PREFIX):
+                    self.send_tictactoe_move(my_msg)
+                elif my_msg.startswith(TICTACTOE_LEAVE_PREFIX):
+                    self.leave_tictactoe()
                 elif my_msg[0] == 'c':
                     peer = my_msg[1:].strip()
                     if self.connect_to(peer) == True:

@@ -23,6 +23,8 @@ class Server:
         self.all_sockets = []
         self.group = grp.Group()
         self.scoreboards = {}
+        self.tictactoe_waiting = None
+        self.tictactoe_sessions = {}
         #start server
         self.server=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind(SERVER)
@@ -81,6 +83,171 @@ class Server:
         for sock in list(self.logged_name2sock.values()):
             mysend(sock, msg)
 
+    def tictactoe_state_msg(self, session, status = "playing", message = ""):
+        return json.dumps({
+            "action": "tictactoe_state",
+            "status": status,
+            "board": session["board"],
+            "turn": session["turn"],
+            "players": session["players"],
+            "winner": session["winner"],
+            "message": message
+        })
+
+    def send_tictactoe_state(self, name, status = "playing", message = ""):
+        if name not in self.tictactoe_sessions:
+            return
+        sock = self.logged_name2sock.get(name)
+        if sock is not None:
+            mysend(sock, self.tictactoe_state_msg(
+                self.tictactoe_sessions[name], status, message))
+
+    def broadcast_tictactoe_state(self, session, status = "playing", message = ""):
+        msg = self.tictactoe_state_msg(session, status, message)
+        for player_name in session["players"].values():
+            sock = self.logged_name2sock.get(player_name)
+            if sock is not None:
+                mysend(sock, msg)
+
+    def send_tictactoe_error(self, sock, message):
+        mysend(sock, json.dumps({
+            "action": "tictactoe_error",
+            "message": message
+        }))
+
+    def find_tictactoe_winner(self, board):
+        winning_lines = [
+            (0, 1, 2), (3, 4, 5), (6, 7, 8),
+            (0, 3, 6), (1, 4, 7), (2, 5, 8),
+            (0, 4, 8), (2, 4, 6)
+        ]
+        for a, b, c in winning_lines:
+            if board[a] != "" and board[a] == board[b] and board[b] == board[c]:
+                return board[a]
+        if "" not in board:
+            return "draw"
+        return None
+
+    def start_tictactoe(self, sock):
+        name = self.logged_sock2name[sock]
+        if name in self.tictactoe_sessions:
+            self.send_tictactoe_state(name, "playing", "You are already in a Tic-Tac-Toe game.")
+            return
+
+        if self.tictactoe_waiting == name:
+            self.send_tictactoe_error(sock, "Waiting for another player to join Tic-Tac-Toe.")
+            return
+
+        if self.tictactoe_waiting is None:
+            self.tictactoe_waiting = name
+            mysend(sock, json.dumps({
+                "action": "tictactoe_state",
+                "status": "waiting",
+                "board": [""] * 9,
+                "turn": "X",
+                "players": {"X": name, "O": ""},
+                "winner": None,
+                "message": "Waiting for another player..."
+            }))
+            return
+
+        first_player = self.tictactoe_waiting
+        self.tictactoe_waiting = None
+        session = {
+            "board": [""] * 9,
+            "turn": "X",
+            "players": {
+                "X": first_player,
+                "O": name
+            },
+            "winner": None
+        }
+        self.tictactoe_sessions[first_player] = session
+        self.tictactoe_sessions[name] = session
+        self.broadcast_tictactoe_state(session, "playing", "Tic-Tac-Toe game started.")
+
+    def make_tictactoe_move(self, sock, position):
+        name = self.logged_sock2name[sock]
+        if name not in self.tictactoe_sessions:
+            self.send_tictactoe_error(sock, "You are not in a Tic-Tac-Toe game.")
+            return
+
+        session = self.tictactoe_sessions[name]
+        if session["winner"] is not None:
+            self.send_tictactoe_error(sock, "This Tic-Tac-Toe game is already over.")
+            return
+
+        symbol = None
+        for mark, player_name in session["players"].items():
+            if player_name == name:
+                symbol = mark
+                break
+
+        if symbol != session["turn"]:
+            self.send_tictactoe_error(sock, "It is not your turn.")
+            return
+
+        try:
+            position = int(position)
+        except (TypeError, ValueError):
+            self.send_tictactoe_error(sock, "Invalid Tic-Tac-Toe move.")
+            return
+
+        if position < 0 or position > 8:
+            self.send_tictactoe_error(sock, "Move must be inside the board.")
+            return
+        if session["board"][position] != "":
+            self.send_tictactoe_error(sock, "That square is already taken.")
+            return
+
+        session["board"][position] = symbol
+        session["winner"] = self.find_tictactoe_winner(session["board"])
+        if session["winner"] is None:
+            session["turn"] = "O" if session["turn"] == "X" else "X"
+            self.broadcast_tictactoe_state(session, "playing", name + " moved.")
+        else:
+            status = "draw" if session["winner"] == "draw" else "finished"
+            if session["winner"] == "draw":
+                message = "Tic-Tac-Toe ended in a draw."
+            else:
+                message = session["players"][session["winner"]] + " wins Tic-Tac-Toe!"
+            players = list(session["players"].values())
+            self.broadcast_tictactoe_state(session, status, message)
+            for player_name in players:
+                if player_name in self.tictactoe_sessions:
+                    del self.tictactoe_sessions[player_name]
+
+    def leave_tictactoe(self, sock):
+        name = self.logged_sock2name.get(sock)
+        if name is None:
+            return
+        if self.tictactoe_waiting == name:
+            self.tictactoe_waiting = None
+            return
+        if name not in self.tictactoe_sessions:
+            return
+
+        session = self.tictactoe_sessions[name]
+        opponent = None
+        for player_name in session["players"].values():
+            if player_name != name:
+                opponent = player_name
+                break
+
+        for player_name in list(session["players"].values()):
+            if player_name in self.tictactoe_sessions:
+                del self.tictactoe_sessions[player_name]
+
+        if opponent in self.logged_name2sock:
+            ended_session = {
+                "board": session["board"],
+                "turn": session["turn"],
+                "players": session["players"],
+                "winner": None
+            }
+            mysend(self.logged_name2sock[opponent], self.tictactoe_state_msg(
+                ended_session, "finished", name + " left Tic-Tac-Toe."))
+
     def new_client(self, sock):
         #add to all sockets and to new clients
         print('new client...')
@@ -126,6 +293,7 @@ class Server:
     def logout(self, sock):
         #remove sock from all lists
         name = self.logged_sock2name[sock]
+        self.leave_tictactoe(sock)
         pkl.dump(self.indices[name], open(name + '.idx','wb'))
         del self.indices[name]
         del self.logged_name2sock[name]
@@ -213,6 +381,17 @@ class Server:
             elif msg["action"] == "scoreboard_request":
                 game = msg.get("game", "snake")
                 self.send_scoreboard(from_sock, game)
+#==============================================================================
+# handle interactive Tic-Tac-Toe multiplayer game
+#==============================================================================
+            elif msg["action"] == "tictactoe_start":
+                self.start_tictactoe(from_sock)
+
+            elif msg["action"] == "tictactoe_move":
+                self.make_tictactoe_move(from_sock, msg.get("position"))
+
+            elif msg["action"] == "tictactoe_leave":
+                self.leave_tictactoe(from_sock)
 #==============================================================================
 #                 listing available peers
 #==============================================================================

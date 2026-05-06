@@ -51,6 +51,7 @@ class GUI:
         self.chatbotButton = None
         self.group_bot_invited = False
         self.snake_game = None
+        self.tictactoe_game = None
         self.sidebar_groups = {}
         self.current_sidebar_body = None
 
@@ -256,6 +257,9 @@ class GUI:
                                 activebackground = "#06AD56",
                                 activeforeground = "#FFFFFF")
         self.add_sidebar_button("Leaderboard", self.request_snake_leaderboard)
+        self.add_sidebar_button("Tic-Tac-Toe", self.start_tictactoe_game,
+                                bg = "#EAF2FF",
+                                activebackground = "#D8E8FF")
 
         self.add_sidebar_section("AI Assistant")
         self.chatbotButton = self.add_sidebar_button("Bot", self.ask_chatbot,
@@ -656,6 +660,74 @@ class GUI:
         self.display_system_message("Requesting Snake leaderboard...")
         self.entryMsg.focus()
 
+    def start_tictactoe_game(self):
+        if self.bot_chat_active == True:
+            self.exit_bot_chat()
+
+        try:
+            from tictactoe_game import TicTacToeGame
+            if self.tictactoe_game is None:
+                self.tictactoe_game = TicTacToeGame(
+                    parent = self.Window,
+                    player_name = self.name,
+                    on_start = self.request_tictactoe_start,
+                    on_move = self.send_tictactoe_move,
+                    on_leave = self.leave_tictactoe_game
+                )
+            self.tictactoe_game.start()
+            self.request_tictactoe_start()
+            self.display_system_message("Tic-Tac-Toe matchmaking started.")
+        except Exception as exc:
+            self.display_system_message("Could not start Tic-Tac-Toe: " + str(exc))
+
+    def request_tictactoe_start(self):
+        self.outgoing_msgs.put(TICTACTOE_START_PREFIX)
+
+    def send_tictactoe_move(self, position):
+        payload = {
+            "position": position
+        }
+        self.outgoing_msgs.put(TICTACTOE_MOVE_PREFIX + json.dumps(payload))
+
+    def leave_tictactoe_game(self):
+        self.outgoing_msgs.put(TICTACTOE_LEAVE_PREFIX)
+
+    def handle_tictactoe_event(self, event_json):
+        try:
+            event = json.loads(event_json)
+        except json.JSONDecodeError:
+            self.display_system_message("Invalid Tic-Tac-Toe update received.")
+            return
+
+        if event.get("action") == "tictactoe_error":
+            message = event.get("message", "Tic-Tac-Toe error.")
+            if self.tictactoe_game is not None:
+                self.tictactoe_game.show_error(message)
+            self.display_system_message(message)
+            return
+
+        if event.get("action") != "tictactoe_state":
+            return
+
+        try:
+            from tictactoe_game import TicTacToeGame
+            if self.tictactoe_game is None:
+                self.tictactoe_game = TicTacToeGame(
+                    parent = self.Window,
+                    player_name = self.name,
+                    on_start = self.request_tictactoe_start,
+                    on_move = self.send_tictactoe_move,
+                    on_leave = self.leave_tictactoe_game
+                )
+            self.tictactoe_game.start()
+            self.tictactoe_game.apply_state(event)
+        except Exception as exc:
+            self.display_system_message("Could not update Tic-Tac-Toe: " + str(exc))
+
+        message = event.get("message", "")
+        if len(message) > 0:
+            self.display_system_message(message)
+
     def update_sidebar(self):
         if self.bot_chat_active == True:
             status = "ChatBot"
@@ -764,6 +836,20 @@ class GUI:
 
         if msg.startswith(FILE_RECV_PREFIX):
             self.receive_file(msg[len(FILE_RECV_PREFIX):])
+            self.update_sidebar()
+            return
+
+        event_index = msg.find(TICTACTOE_EVENT_PREFIX)
+        if event_index > 0:
+            before_event = msg[:event_index].strip()
+            if len(before_event) > 0:
+                self.display_system_message(before_event)
+            self.handle_tictactoe_event(msg[event_index + len(TICTACTOE_EVENT_PREFIX):].strip())
+            self.update_sidebar()
+            return
+
+        if msg.startswith(TICTACTOE_EVENT_PREFIX):
+            self.handle_tictactoe_event(msg[len(TICTACTOE_EVENT_PREFIX):])
             self.update_sidebar()
             return
 
@@ -935,6 +1021,12 @@ class GUI:
         if msg.startswith(GAME_SCORE_PREFIX):
             return False
         if msg.startswith(GAME_LEADERBOARD_PREFIX):
+            return False
+        if msg.startswith(TICTACTOE_START_PREFIX):
+            return False
+        if msg.startswith(TICTACTOE_MOVE_PREFIX):
+            return False
+        if msg.startswith(TICTACTOE_LEAVE_PREFIX):
             return False
         if msg[0] == "?":
             return False

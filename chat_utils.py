@@ -17,6 +17,7 @@ menu = "\n++++ Choose one of the following commands\n \
         File button: send a small file to the current chat\n \
         Snake button: play Snake and submit your score\n \
         Leaderboard button: show Snake rankings\n \
+        Tic-Tac-Toe button: play an interactive two-player game\n \
         @bot _message_: ask the AI chatbot locally\n \
         ? _term_: to search your chat logs where _term_ appears\n \
         p _#_: to get number <#> sonnet\n \
@@ -35,6 +36,10 @@ FILE_CMD_PREFIX = "__file_transfer__:"
 FILE_RECV_PREFIX = "__received_file__:"
 GAME_SCORE_PREFIX = "__game_score__:"
 GAME_LEADERBOARD_PREFIX = "__game_leaderboard__:"
+TICTACTOE_START_PREFIX = "__tictactoe_start__:"
+TICTACTOE_MOVE_PREFIX = "__tictactoe_move__:"
+TICTACTOE_LEAVE_PREFIX = "__tictactoe_leave__:"
+TICTACTOE_EVENT_PREFIX = "__tictactoe_event__:"
 
 def print_state(state):
     print('**** State *****::::: ')
