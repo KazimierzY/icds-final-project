@@ -47,8 +47,12 @@ class GUI:
         self.bot_name = "AI_Bot"
         self.bot_personality = "friendly Python learning assistant"
         self.bot_chat_active = False
+        self.botStyleButton = None
         self.chatbotButton = None
         self.group_bot_invited = False
+        self.snake_game = None
+        self.sidebar_groups = {}
+        self.current_sidebar_body = None
 
     def login(self):
         # login window
@@ -166,12 +170,36 @@ class GUI:
 
         self.sidebar = Frame(self.mainFrame,
                              bg = "#FFFFFF",
-                             width = 220)
+                             width = 240)
         self.sidebar.pack(side = LEFT,
                           fill = Y)
         self.sidebar.pack_propagate(False)
 
-        self.profileTitle = Label(self.sidebar,
+        self.sidebarCanvas = Canvas(self.sidebar,
+                                    bg = "#FFFFFF",
+                                    bd = 0,
+                                    highlightthickness = 0)
+        self.sidebarScrollbar = Scrollbar(self.sidebar,
+                                          orient = VERTICAL,
+                                          command = self.sidebarCanvas.yview)
+        self.sidebarContent = Frame(self.sidebarCanvas,
+                                    bg = "#FFFFFF")
+        self.sidebarWindow = self.sidebarCanvas.create_window(
+            (0, 0),
+            window = self.sidebarContent,
+            anchor = NW)
+        self.sidebarCanvas.config(yscrollcommand = self.sidebarScrollbar.set)
+        self.sidebarCanvas.pack(side = LEFT,
+                                fill = BOTH,
+                                expand = True)
+        self.sidebarScrollbar.pack(side = RIGHT,
+                                   fill = Y)
+        self.sidebarContent.bind("<Configure>", self.update_sidebar_scroll_region)
+        self.sidebarCanvas.bind("<Configure>", self.resize_sidebar_content)
+        self.bind_sidebar_scroll(self.sidebarCanvas)
+        self.bind_sidebar_scroll(self.sidebarContent)
+
+        self.profileTitle = Label(self.sidebarContent,
                                   text = "My Profile",
                                   bg = "#FFFFFF",
                                   fg = "#222222",
@@ -180,8 +208,9 @@ class GUI:
         self.profileTitle.pack(fill = X,
                                padx = 16,
                                pady = (18, 6))
+        self.bind_sidebar_scroll(self.profileTitle)
 
-        self.nameLabel = Label(self.sidebar,
+        self.nameLabel = Label(self.sidebarContent,
                                text = "User: " + self.name,
                                bg = "#FFFFFF",
                                fg = "#333333",
@@ -190,8 +219,9 @@ class GUI:
         self.nameLabel.pack(fill = X,
                             padx = 16,
                             pady = 3)
+        self.bind_sidebar_scroll(self.nameLabel)
 
-        self.stateLabel = Label(self.sidebar,
+        self.stateLabel = Label(self.sidebarContent,
                                 text = "Status: Online",
                                 bg = "#FFFFFF",
                                 fg = "#333333",
@@ -200,32 +230,41 @@ class GUI:
         self.stateLabel.pack(fill = X,
                              padx = 16,
                              pady = 3)
+        self.bind_sidebar_scroll(self.stateLabel)
 
-        self.peerLabel = Label(self.sidebar,
+        self.peerLabel = Label(self.sidebarContent,
                                text = "Chatting with: None",
                                bg = "#FFFFFF",
                                fg = "#333333",
                                font = "Helvetica 10",
                                anchor = W,
-                               wraplength = 180,
+                               wraplength = 200,
                                justify = LEFT)
         self.peerLabel.pack(fill = X,
                             padx = 16,
                             pady = 3)
+        self.bind_sidebar_scroll(self.peerLabel)
 
-        self.actionTitle = Label(self.sidebar,
-                                 text = "Actions",
-                                 bg = "#FFFFFF",
-                                 fg = "#222222",
-                                 font = "Helvetica 12 bold",
-                                 anchor = W)
-        self.actionTitle.pack(fill = X,
-                              padx = 16,
-                              pady = (24, 8))
-
-        self.add_sidebar_button("Time", lambda: self.send_quick_command("time"))
+        self.add_sidebar_section("Chat")
         self.add_sidebar_button("Who", lambda: self.send_quick_command("who"))
         self.add_sidebar_button("Connect", self.ask_connect)
+
+        self.add_sidebar_section("Game")
+        self.add_sidebar_button("Play Snake", self.start_snake_game,
+                                bg = "#07C160",
+                                fg = "#FFFFFF",
+                                activebackground = "#06AD56",
+                                activeforeground = "#FFFFFF")
+        self.add_sidebar_button("Leaderboard", self.request_snake_leaderboard)
+
+        self.add_sidebar_section("AI Assistant")
+        self.chatbotButton = self.add_sidebar_button("Bot", self.ask_chatbot,
+                                                     bg = "#FFE7A3",
+                                                     activebackground = "#FFD980")
+        self.botStyleButton = self.add_sidebar_button("Bot Style", self.ask_bot_personality)
+
+        self.add_sidebar_section("Tools")
+        self.add_sidebar_button("Time", lambda: self.send_quick_command("time"))
         self.add_sidebar_button("Poem", self.ask_poem)
         self.add_sidebar_button("Search", self.ask_search)
         self.add_sidebar_button("Clear Chat", self.clear_chat)
@@ -254,34 +293,6 @@ class GUI:
         self.chatInfo.pack(side = LEFT,
                            fill = BOTH,
                            expand = True)
-
-        self.botStyleButton = Button(self.chatHeader,
-                                     text = "Bot Style",
-                                     font = "Helvetica 9",
-                                     width = 9,
-                                     bg = "#E8ECEF",
-                                     fg = "#222222",
-                                     activebackground = "#D9DEE3",
-                                     activeforeground = "#111111",
-                                     relief = FLAT,
-                                     command = self.ask_bot_personality)
-        self.botStyleButton.pack(side = RIGHT,
-                                 padx = (6, 0),
-                                 pady = 7)
-
-        self.chatbotButton = Button(self.chatHeader,
-                                    text = "Bot",
-                                    font = "Helvetica 9 bold",
-                                    width = 7,
-                                    bg = "#FFE7A3",
-                                    fg = "#222222",
-                                    activebackground = "#FFD980",
-                                    activeforeground = "#111111",
-                                    relief = FLAT,
-                                    command = self.ask_chatbot)
-        self.chatbotButton.pack(side = RIGHT,
-                                padx = (6, 0),
-                                pady = 7)
 
         # Window area for displaying chat and system messages.
         self.messageFrame = Frame(self.rightPanel,
@@ -434,14 +445,91 @@ class GUI:
             self.emojiPanel = None
         self.update_sidebar()
 
-    def add_sidebar_button(self, text, command):
-        button = Button(self.sidebar,
+    def update_sidebar_scroll_region(self, event = None):
+        self.sidebarCanvas.configure(scrollregion = self.sidebarCanvas.bbox("all"))
+
+    def resize_sidebar_content(self, event):
+        self.sidebarCanvas.itemconfig(self.sidebarWindow, width = event.width)
+
+    def bind_sidebar_scroll(self, widget):
+        widget.bind("<MouseWheel>", self.on_sidebar_mousewheel)
+        widget.bind("<Button-4>", self.on_sidebar_mousewheel)
+        widget.bind("<Button-5>", self.on_sidebar_mousewheel)
+
+    def on_sidebar_mousewheel(self, event):
+        if event.num == 4:
+            self.sidebarCanvas.yview_scroll(-1, "units")
+        elif event.num == 5:
+            self.sidebarCanvas.yview_scroll(1, "units")
+        else:
+            self.sidebarCanvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def add_sidebar_section(self, text, collapsed = False):
+        title = text.upper()
+        group = Frame(self.sidebarContent,
+                      bg = "#FFFFFF")
+        group.pack(fill = X)
+        self.bind_sidebar_scroll(group)
+
+        header = Button(group,
+                        text = "[-] " + title,
+                        font = "Helvetica 9 bold",
+                        bg = "#FFFFFF",
+                        fg = "#666666",
+                        activebackground = "#F2F3F5",
+                        activeforeground = "#222222",
+                        relief = FLAT,
+                        anchor = W,
+                        padx = 4,
+                        command = lambda key = text: self.toggle_sidebar_section(key))
+        header.pack(fill = X,
+                    padx = 12,
+                    pady = (20, 6))
+        self.bind_sidebar_scroll(header)
+
+        body = Frame(group,
+                     bg = "#FFFFFF")
+        body.pack(fill = X)
+        self.bind_sidebar_scroll(body)
+
+        self.sidebar_groups[text] = {
+            "title": title,
+            "header": header,
+            "body": body,
+            "collapsed": False
+        }
+        self.current_sidebar_body = body
+        if collapsed == True:
+            self.toggle_sidebar_section(text)
+        return body
+
+    def toggle_sidebar_section(self, text):
+        group = self.sidebar_groups[text]
+        if group["collapsed"] == True:
+            group["body"].pack(fill = X)
+            group["header"].config(text = "[-] " + group["title"])
+            group["collapsed"] = False
+        else:
+            group["body"].pack_forget()
+            group["header"].config(text = "[+] " + group["title"])
+            group["collapsed"] = True
+        self.update_sidebar_scroll_region()
+
+    def add_sidebar_button(self, text, command,
+                           bg = "#F2F3F5",
+                           fg = "#222222",
+                           activebackground = "#E5E7EB",
+                           activeforeground = "#111111"):
+        parent = self.current_sidebar_body
+        if parent is None:
+            parent = self.sidebarContent
+        button = Button(parent,
                         text = text,
                         font = "Helvetica 10",
-                        bg = "#F2F3F5",
-                        fg = "#222222",
-                        activebackground = "#E5E7EB",
-                        activeforeground = "#111111",
+                        bg = bg,
+                        fg = fg,
+                        activebackground = activebackground,
+                        activeforeground = activeforeground,
                         relief = FLAT,
                         anchor = W,
                         padx = 12,
@@ -449,6 +537,7 @@ class GUI:
         button.pack(fill = X,
                     padx = 16,
                     pady = 4)
+        self.bind_sidebar_scroll(button)
         return button
 
     def add_emoji_panel(self):
@@ -534,6 +623,37 @@ class GUI:
         }
         self.outgoing_msgs.put(FILE_CMD_PREFIX + json.dumps(payload))
         self.display_chat_message("Me", "[file] " + filename, "me")
+        self.entryMsg.focus()
+
+    def start_snake_game(self):
+        if self.bot_chat_active == True:
+            self.exit_bot_chat()
+
+        try:
+            from snake_game import SnakeGame
+            self.snake_game = SnakeGame(
+                parent = self.Window,
+                player_name = self.name,
+                on_game_over = self.submit_snake_score
+            )
+            self.snake_game.start()
+            self.display_system_message("Snake started. Use arrow keys to play.")
+        except Exception as exc:
+            self.display_system_message("Could not start Snake: " + str(exc))
+
+    def submit_snake_score(self, score):
+        payload = {
+            "game": "snake",
+            "score": score
+        }
+        self.outgoing_msgs.put(GAME_SCORE_PREFIX + json.dumps(payload))
+        self.display_system_message("Snake game over. Score submitted: " + str(score))
+
+    def request_snake_leaderboard(self):
+        if self.bot_chat_active == True:
+            self.exit_bot_chat()
+        self.outgoing_msgs.put(GAME_LEADERBOARD_PREFIX + "snake")
+        self.display_system_message("Requesting Snake leaderboard...")
         self.entryMsg.focus()
 
     def update_sidebar(self):
@@ -811,6 +931,10 @@ class GUI:
         if msg[0] == "c":
             return False
         if msg.startswith(FILE_CMD_PREFIX):
+            return False
+        if msg.startswith(GAME_SCORE_PREFIX):
+            return False
+        if msg.startswith(GAME_LEADERBOARD_PREFIX):
             return False
         if msg[0] == "?":
             return False

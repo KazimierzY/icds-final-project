@@ -48,6 +48,52 @@ class ClientSM:
         self.out_msg += 'You are disconnected from ' + self.peer + '\n'
         self.peer = ''
 
+    def submit_game_score(self, my_msg):
+        score_msg = json.loads(my_msg[len(GAME_SCORE_PREFIX):])
+        game = score_msg.get("game", "snake")
+        score = int(score_msg.get("score", 0))
+        mysend(self.s, json.dumps({
+            "action": "score_submit",
+            "game": game,
+            "score": score
+        }))
+        self.out_msg += "Submitted " + game + " score: " + str(score) + "\n"
+
+    def request_game_leaderboard(self, my_msg):
+        game = my_msg[len(GAME_LEADERBOARD_PREFIX):].strip()
+        if len(game) == 0:
+            game = "snake"
+        mysend(self.s, json.dumps({
+            "action": "scoreboard_request",
+            "game": game
+        }))
+        response = json.loads(myrecv(self.s))
+        self.handle_scoreboard(response)
+
+    def handle_scoreboard(self, msg):
+        game = msg.get("game", "snake")
+        scores = msg.get("scores", [])
+        self.out_msg += self.format_scoreboard(game, scores)
+
+    def format_scoreboard(self, game, scores):
+        title = game.capitalize() + " Leaderboard"
+        if len(scores) == 0:
+            return title + "\nNo scores yet.\n"
+
+        lines = [title]
+        for index, entry in enumerate(scores, start = 1):
+            lines.append(
+                str(index) + ". " + entry.get("name", "unknown")
+                + " - " + str(entry.get("score", 0))
+                + " (" + entry.get("time", "") + ")")
+        return "\n".join(lines) + "\n"
+
+    def handle_incoming_common(self, msg):
+        if msg["action"] == "scoreboard":
+            self.handle_scoreboard(msg)
+            return True
+        return False
+
     def proc(self, my_msg, peer_msg):
         self.out_msg = ''
 #==============================================================================
@@ -73,6 +119,12 @@ class ClientSM:
                     logged_in = json.loads(myrecv(self.s))["results"]
                     self.out_msg += 'Here are all the users in the system:\n'
                     self.out_msg += logged_in
+
+                elif my_msg.startswith(GAME_SCORE_PREFIX):
+                    self.submit_game_score(my_msg)
+
+                elif my_msg.startswith(GAME_LEADERBOARD_PREFIX):
+                    self.request_game_leaderboard(my_msg)
 
                 elif my_msg[0] == 'c':
                     peer = my_msg[1:]
@@ -108,7 +160,9 @@ class ClientSM:
 
             if len(peer_msg) > 0:
                 peer_msg = json.loads(peer_msg)
-                if peer_msg["action"] == "connect":
+                if self.handle_incoming_common(peer_msg):
+                    pass
+                elif peer_msg["action"] == "connect":
                     self.peer = peer_msg["from"]
                     self.out_msg += 'Request from ' + self.peer + '\n'
                     self.out_msg += 'You are connected with ' + self.peer
@@ -145,6 +199,10 @@ class ClientSM:
                     logged_in = json.loads(myrecv(self.s))["results"]
                     self.out_msg += 'Here are all the users in the system:\n'
                     self.out_msg += logged_in
+                elif my_msg.startswith(GAME_SCORE_PREFIX):
+                    self.submit_game_score(my_msg)
+                elif my_msg.startswith(GAME_LEADERBOARD_PREFIX):
+                    self.request_game_leaderboard(my_msg)
                 elif my_msg[0] == 'c':
                     peer = my_msg[1:].strip()
                     if self.connect_to(peer) == True:
@@ -178,6 +236,8 @@ class ClientSM:
                     self.state = S_LOGGEDIN
                 elif peer_msg["action"] == "file":
                     self.out_msg += FILE_RECV_PREFIX + json.dumps(peer_msg)
+                elif self.handle_incoming_common(peer_msg):
+                    pass
                 else:
                     self.out_msg += peer_msg["from"] + peer_msg["message"]
 

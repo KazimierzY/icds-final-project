@@ -22,6 +22,7 @@ class Server:
         self.logged_sock2name = {} # dict mapping socket to user name
         self.all_sockets = []
         self.group = grp.Group()
+        self.scoreboards = {}
         #start server
         self.server=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind(SERVER)
@@ -34,6 +35,52 @@ class Server:
         # self.sonnet = pkl.load(self.sonnet_f)
         # self.sonnet_f.close()
         self.sonnet = indexer.PIndex("AllSonnets.txt")
+
+    def record_game_score(self, name, game, score):
+        try:
+            score = int(score)
+        except (TypeError, ValueError):
+            score = 0
+        if score < 0:
+            score = 0
+
+        entry = {
+            "name": name,
+            "score": score,
+            "time": time.strftime('%d.%m.%y,%H:%M', time.localtime())
+        }
+        if game not in self.scoreboards:
+            self.scoreboards[game] = []
+
+        replaced = False
+        for index, old_entry in enumerate(self.scoreboards[game]):
+            if old_entry["name"] == name:
+                if score > old_entry["score"]:
+                    self.scoreboards[game][index] = entry
+                replaced = True
+                break
+
+        if replaced == False:
+            self.scoreboards[game].append(entry)
+
+        self.scoreboards[game].sort(key = lambda item: item["score"], reverse = True)
+        self.scoreboards[game] = self.scoreboards[game][:10]
+
+    def scoreboard_msg(self, game):
+        return json.dumps({
+            "action": "scoreboard",
+            "game": game,
+            "scores": self.scoreboards.get(game, [])
+        })
+
+    def send_scoreboard(self, sock, game):
+        mysend(sock, self.scoreboard_msg(game))
+
+    def broadcast_scoreboard(self, game):
+        msg = self.scoreboard_msg(game)
+        for sock in list(self.logged_name2sock.values()):
+            mysend(sock, msg)
+
     def new_client(self, sock):
         #add to all sockets and to new clients
         print('new client...')
@@ -154,6 +201,19 @@ class Server:
                         "data": msg["data"]
                     }))
 #==============================================================================
+# handle single-player game scores
+#==============================================================================
+            elif msg["action"] == "score_submit":
+                from_name = self.logged_sock2name[from_sock]
+                game = msg.get("game", "snake")
+                score = msg.get("score", 0)
+                self.record_game_score(from_name, game, score)
+                self.broadcast_scoreboard(game)
+
+            elif msg["action"] == "scoreboard_request":
+                game = msg.get("game", "snake")
+                self.send_scoreboard(from_sock, game)
+#==============================================================================
 #                 listing available peers
 #==============================================================================
             elif msg["action"] == "list":
@@ -233,4 +293,5 @@ def main():
     server=Server()
     server.run()
 
-main()
+if __name__ == "__main__":
+    main()
