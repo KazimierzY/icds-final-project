@@ -19,6 +19,8 @@ menu = "\n++++ Choose one of the following commands\n \
         Leaderboard button: show Snake rankings\n \
         Tic-Tac-Toe button: play an interactive two-player game\n \
         @bot _message_: ask the AI chatbot locally\n \
+        AI Picture button: enter image generation mode\n \
+        /aipic: _prompt_: generate an AI picture quickly\n \
         ? _term_: to search your chat logs where _term_ appears\n \
         p _#_: to get number <#> sonnet\n \
         q: to leave the chat system\n\n"

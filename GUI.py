@@ -23,6 +23,8 @@ import json
 
 BOT_UI_PREFIX = "__chatbot_reply__:"
 BOT_ERROR_PREFIX = "__chatbot_error__:"
+AIPIC_UI_PREFIX = "__aipic_image__:"
+AIPIC_ERROR_PREFIX = "__aipic_error__:"
 
 # GUI class for the chat
 class GUI:
@@ -47,12 +49,15 @@ class GUI:
         self.bot_name = "AI_Bot"
         self.bot_personality = "friendly Python learning assistant"
         self.bot_chat_active = False
+        self.aipic_mode_active = False
         self.botStyleButton = None
         self.chatbotButton = None
+        self.aipicButton = None
         self.group_bot_invited = False
         self.snake_game = None
         self.tictactoe_game = None
         self.tictactoe_room = ""
+        self.chat_images = []
         self.sidebar_groups = {}
         self.current_sidebar_body = None
 
@@ -266,6 +271,9 @@ class GUI:
         self.chatbotButton = self.add_sidebar_button("Bot", self.ask_chatbot,
                                                      bg = "#FFE7A3",
                                                      activebackground = "#FFD980")
+        self.aipicButton = self.add_sidebar_button("AI Picture", self.ask_aipic_mode,
+                                                   bg = "#EAF2FF",
+                                                   activebackground = "#D8E8FF")
         self.botStyleButton = self.add_sidebar_button("Bot Style", self.ask_bot_personality)
 
         self.add_sidebar_section("Tools")
@@ -631,6 +639,8 @@ class GUI:
         self.entryMsg.focus()
 
     def start_snake_game(self):
+        if self.aipic_mode_active == True:
+            self.exit_aipic_mode()
         if self.bot_chat_active == True:
             self.exit_bot_chat()
 
@@ -655,6 +665,8 @@ class GUI:
         self.display_system_message("Snake game over. Score submitted: " + str(score))
 
     def request_snake_leaderboard(self):
+        if self.aipic_mode_active == True:
+            self.exit_aipic_mode()
         if self.bot_chat_active == True:
             self.exit_bot_chat()
         self.outgoing_msgs.put(GAME_LEADERBOARD_PREFIX + "snake")
@@ -662,6 +674,8 @@ class GUI:
         self.entryMsg.focus()
 
     def start_tictactoe_game(self):
+        if self.aipic_mode_active == True:
+            self.exit_aipic_mode()
         if self.bot_chat_active == True:
             self.exit_bot_chat()
 
@@ -756,7 +770,11 @@ class GUI:
             self.display_system_message(message)
 
     def update_sidebar(self):
-        if self.bot_chat_active == True:
+        if self.aipic_mode_active == True:
+            status = "AI Picture"
+            chat_text = "Chatting with: AI Picture"
+            info_text = "AI Picture mode"
+        elif self.bot_chat_active == True:
             status = "ChatBot"
             chat_text = "Chatting with: " + self.bot_name
             info_text = "ChatBot mode: " + self.bot_name
@@ -775,6 +793,8 @@ class GUI:
         self.chatInfo.config(text = info_text)
 
     def send_quick_command(self, command):
+        if self.aipic_mode_active == True:
+            self.exit_aipic_mode()
         if self.bot_chat_active == True:
             self.exit_bot_chat()
         self.sendButton(command)
@@ -785,6 +805,8 @@ class GUI:
     def ask_connect(self):
         peer = simpledialog.askstring("Connect", "Enter username:", parent = self.Window)
         if peer is not None and len(peer.strip()) > 0:
+            if self.aipic_mode_active == True:
+                self.exit_aipic_mode()
             if self.bot_chat_active == True:
                 self.exit_bot_chat()
             self.sendButton("c " + peer.strip())
@@ -792,6 +814,8 @@ class GUI:
     def ask_poem(self):
         poem_idx = simpledialog.askstring("Poem", "Enter sonnet number:", parent = self.Window)
         if poem_idx is not None and len(poem_idx.strip()) > 0:
+            if self.aipic_mode_active == True:
+                self.exit_aipic_mode()
             if self.bot_chat_active == True:
                 self.exit_bot_chat()
             self.sendButton("p " + poem_idx.strip())
@@ -799,6 +823,8 @@ class GUI:
     def ask_search(self):
         term = simpledialog.askstring("Search", "Enter search term:", parent = self.Window)
         if term is not None and len(term.strip()) > 0:
+            if self.aipic_mode_active == True:
+                self.exit_aipic_mode()
             if self.bot_chat_active == True:
                 self.exit_bot_chat()
             self.sendButton("? " + term.strip())
@@ -808,6 +834,12 @@ class GUI:
             self.exit_bot_chat()
         else:
             self.enter_bot_chat()
+
+    def ask_aipic_mode(self):
+        if self.aipic_mode_active == True:
+            self.exit_aipic_mode()
+        else:
+            self.enter_aipic_mode()
 
     def ask_bot_personality(self):
         personality = simpledialog.askstring(
@@ -846,6 +878,27 @@ class GUI:
         if len(msg) > 0:
             self.display_message("[" + sender + "] " + msg, tag)
 
+    def display_chat_image(self, sender, image_path, prompt):
+        if not os.path.exists(image_path):
+            self.display_system_message("Generated image file was not found: " + image_path)
+            return
+
+        self.textCons.config(state = NORMAL)
+        self.textCons.insert(END, "[" + sender + "] AI Picture: " + prompt + "\n", "me")
+        try:
+            image = PhotoImage(file = image_path)
+            if image.width() > 560:
+                factor = int(image.width() / 560) + 1
+                image = image.subsample(factor, factor)
+            self.chat_images.append(image)
+            self.textCons.image_create(END, image = image)
+            self.textCons.insert(END, "\nSaved: " + image_path + "\n\n", "system")
+        except TclError as exc:
+            self.textCons.insert(END, "Saved: " + image_path + "\n")
+            self.textCons.insert(END, "Could not preview image: " + str(exc) + "\n\n", "system")
+        self.textCons.config(state = DISABLED)
+        self.textCons.see(END)
+
     def display_state_output(self, msg):
         msg = msg.strip()
         if len(msg) == 0:
@@ -858,6 +911,17 @@ class GUI:
 
         if msg.startswith(BOT_ERROR_PREFIX):
             self.display_system_message(msg[len(BOT_ERROR_PREFIX):])
+            self.update_sidebar()
+            return
+
+        if msg.startswith(AIPIC_UI_PREFIX):
+            payload = json.loads(msg[len(AIPIC_UI_PREFIX):])
+            self.display_chat_image("Me", payload["path"], payload["prompt"])
+            self.update_sidebar()
+            return
+
+        if msg.startswith(AIPIC_ERROR_PREFIX):
+            self.display_system_message(msg[len(AIPIC_ERROR_PREFIX):])
             self.update_sidebar()
             return
 
@@ -937,12 +1001,29 @@ class GUI:
         if len(msg) == 0:
             return
 
-        if self.bot_chat_active == True:
+        if self.aipic_mode_active == True:
             if msg.lower() == "/exit":
+                self.exit_aipic_mode()
+            elif self.is_aipic_command(msg):
+                self.submit_aipic_message(self.extract_aipic_prompt(msg))
+            else:
+                self.submit_aipic_message(msg)
+            self.entryMsg.delete(0, END)
+            return
+
+        if self.bot_chat_active == True:
+            if self.is_aipic_command(msg):
+                self.submit_aipic_message(self.extract_aipic_prompt(msg))
+            elif msg.lower() == "/exit":
                 self.exit_bot_chat()
             else:
                 prompt = self.extract_bot_prompt(msg) if self.is_bot_command(msg) else msg
                 self.submit_bot_message(prompt, show_prefix = False)
+            self.entryMsg.delete(0, END)
+            return
+
+        if self.is_aipic_command(msg):
+            self.submit_aipic_message(self.extract_aipic_prompt(msg))
             self.entryMsg.delete(0, END)
             return
 
@@ -980,6 +1061,12 @@ class GUI:
         msg_lower = msg.lower()
         return msg_lower.startswith("@bot") or msg_lower.startswith("/bot")
 
+    def is_aipic_command(self, msg):
+        return msg.lower().startswith("/aipic:")
+
+    def extract_aipic_prompt(self, msg):
+        return msg[len("/aipic:"):].strip()
+
     def extract_bot_prompt(self, msg):
         if msg.lower().startswith("@bot"):
             return msg[4:].strip(" :")
@@ -995,8 +1082,50 @@ class GUI:
         thread.daemon = True
         thread.start()
 
+    def submit_aipic_message(self, prompt):
+        if len(prompt) == 0:
+            self.display_system_message("Type an image prompt first.")
+            return
+
+        self.display_system_message("Generating AI picture...")
+        thread = threading.Thread(target = self.call_aipic, args = (prompt,))
+        thread.daemon = True
+        thread.start()
+
+    def call_aipic(self, prompt):
+        try:
+            from aipic_client import generate_ai_picture
+            image_path = generate_ai_picture(prompt)
+            payload = {
+                "prompt": prompt,
+                "path": image_path
+            }
+            self.ui_msgs.put(AIPIC_UI_PREFIX + json.dumps(payload))
+        except Exception as exc:
+            self.ui_msgs.put(AIPIC_ERROR_PREFIX + "AI picture error: " + str(exc))
+
+    def enter_aipic_mode(self):
+        if self.bot_chat_active == True:
+            self.exit_bot_chat()
+        self.aipic_mode_active = True
+        if self.aipicButton is not None:
+            self.aipicButton.config(text = "Exit Picture")
+        self.display_system_message("AI Picture mode started. Type a prompt and press Send.")
+        self.update_sidebar()
+        self.entryMsg.focus()
+
+    def exit_aipic_mode(self):
+        self.aipic_mode_active = False
+        if self.aipicButton is not None:
+            self.aipicButton.config(text = "AI Picture")
+        self.display_system_message("AI Picture mode ended.")
+        self.update_sidebar()
+        self.entryMsg.focus()
+
     def enter_bot_chat(self):
         try:
+            if self.aipic_mode_active == True:
+                self.exit_aipic_mode()
             self.ensure_bot()
             self.bot_chat_active = True
             if self.chatbotButton is not None:

@@ -4,3 +4,9 @@ __pycache__/
 
 # Local user/session index files
 *.idx
+
+# Local secrets
+.env
+
+# Locally generated AI images
+generated_images/
