@@ -25,6 +25,8 @@ BOT_UI_PREFIX = "__chatbot_reply__:"
 BOT_ERROR_PREFIX = "__chatbot_error__:"
 AIPIC_UI_PREFIX = "__aipic_image__:"
 AIPIC_ERROR_PREFIX = "__aipic_error__:"
+NLP_UI_PREFIX = "__chat_nlp_reply__:"
+NLP_ERROR_PREFIX = "__chat_nlp_error__:"
 
 # GUI class for the chat
 class GUI:
@@ -58,6 +60,7 @@ class GUI:
         self.tictactoe_game = None
         self.tictactoe_room = ""
         self.chat_images = []
+        self.chat_history = []
         self.sidebar_groups = {}
         self.current_sidebar_body = None
 
@@ -280,6 +283,8 @@ class GUI:
         self.add_sidebar_button("Time", lambda: self.send_quick_command("time"))
         self.add_sidebar_button("Poem", self.ask_poem)
         self.add_sidebar_button("Search", self.ask_search)
+        self.add_sidebar_button("Summary", self.show_chat_summary)
+        self.add_sidebar_button("Keywords", self.show_chat_keywords)
         self.add_sidebar_button("Clear Chat", self.clear_chat)
 
         self.rightPanel = Frame(self.mainFrame,
@@ -829,6 +834,20 @@ class GUI:
                 self.exit_bot_chat()
             self.sendButton("? " + term.strip())
 
+    def show_chat_summary(self):
+        if self.aipic_mode_active == True:
+            self.exit_aipic_mode()
+        if self.bot_chat_active == True:
+            self.exit_bot_chat()
+        self.sendButton("/summary")
+
+    def show_chat_keywords(self):
+        if self.aipic_mode_active == True:
+            self.exit_aipic_mode()
+        if self.bot_chat_active == True:
+            self.exit_bot_chat()
+        self.sendButton("/keywords")
+
     def ask_chatbot(self):
         if self.bot_chat_active == True:
             self.exit_bot_chat()
@@ -858,6 +877,7 @@ class GUI:
         self.textCons.config(state = NORMAL)
         self.textCons.delete("1.0", END)
         self.textCons.config(state = DISABLED)
+        self.chat_history = []
 
     def display_message(self, msg, tag = "system"):
         if len(msg) == 0:
@@ -876,7 +896,18 @@ class GUI:
     def display_chat_message(self, sender, msg, tag):
         msg = msg.strip()
         if len(msg) > 0:
+            self.add_chat_history(sender, msg)
             self.display_message("[" + sender + "] " + msg, tag)
+
+    def add_chat_history(self, sender, msg):
+        msg = msg.strip()
+        if len(msg) == 0:
+            return
+        self.chat_history.append({
+            "sender": sender,
+            "text": msg
+        })
+        self.chat_history = self.chat_history[-100:]
 
     def display_chat_image(self, sender, image_path, prompt):
         if not os.path.exists(image_path):
@@ -885,6 +916,7 @@ class GUI:
 
         self.textCons.config(state = NORMAL)
         self.textCons.insert(END, "[" + sender + "] AI Picture: " + prompt + "\n", "me")
+        self.add_chat_history(sender, "AI Picture prompt: " + prompt)
         try:
             image = PhotoImage(file = image_path)
             if image.width() > 560:
@@ -922,6 +954,16 @@ class GUI:
 
         if msg.startswith(AIPIC_ERROR_PREFIX):
             self.display_system_message(msg[len(AIPIC_ERROR_PREFIX):])
+            self.update_sidebar()
+            return
+
+        if msg.startswith(NLP_UI_PREFIX):
+            self.display_system_message(msg[len(NLP_UI_PREFIX):])
+            self.update_sidebar()
+            return
+
+        if msg.startswith(NLP_ERROR_PREFIX):
+            self.display_system_message(msg[len(NLP_ERROR_PREFIX):])
             self.update_sidebar()
             return
 
@@ -1004,6 +1046,8 @@ class GUI:
         if self.aipic_mode_active == True:
             if msg.lower() == "/exit":
                 self.exit_aipic_mode()
+            elif self.is_nlp_command(msg):
+                self.handle_nlp_command(msg)
             elif self.is_aipic_command(msg):
                 self.submit_aipic_message(self.extract_aipic_prompt(msg))
             else:
@@ -1011,9 +1055,16 @@ class GUI:
             self.entryMsg.delete(0, END)
             return
 
+        if self.is_nlp_command(msg):
+            self.handle_nlp_command(msg)
+            self.entryMsg.delete(0, END)
+            return
+
         if self.bot_chat_active == True:
             if self.is_aipic_command(msg):
                 self.submit_aipic_message(self.extract_aipic_prompt(msg))
+            elif self.is_nlp_command(msg):
+                self.handle_nlp_command(msg)
             elif msg.lower() == "/exit":
                 self.exit_bot_chat()
             else:
@@ -1063,6 +1114,30 @@ class GUI:
 
     def is_aipic_command(self, msg):
         return msg.lower().startswith("/aipic:")
+
+    def is_nlp_command(self, msg):
+        msg_lower = msg.lower()
+        return msg_lower == "/summary" or msg_lower == "/keywords"
+
+    def handle_nlp_command(self, msg):
+        command = msg.lower()
+        self.display_system_message("Analyzing recent chat with DeepSeek...")
+        thread = threading.Thread(target = self.call_chat_nlp, args = (command,))
+        thread.daemon = True
+        thread.start()
+
+    def call_chat_nlp(self, command):
+        try:
+            history_snapshot = list(self.chat_history)
+            if command == "/summary":
+                from chat_nlp import summarize_recent_chat
+                result = summarize_recent_chat(history_snapshot)
+            else:
+                from chat_nlp import extract_keywords
+                result = extract_keywords(history_snapshot)
+            self.ui_msgs.put(NLP_UI_PREFIX + result)
+        except Exception as exc:
+            self.ui_msgs.put(NLP_ERROR_PREFIX + "Chat analysis error: " + str(exc))
 
     def extract_aipic_prompt(self, msg):
         return msg[len("/aipic:"):].strip()
@@ -1169,6 +1244,8 @@ class GUI:
         if msg == "time":
             return False
         if msg == "who":
+            return False
+        if self.is_nlp_command(msg):
             return False
         if msg[0] == "c":
             return False
