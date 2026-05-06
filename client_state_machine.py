@@ -5,6 +5,7 @@ Created on Sun Apr  5 00:00:32 2015
 """
 from chat_utils import *
 import json
+import ast
 
 class ClientSM:
     def __init__(self, s):
@@ -99,6 +100,39 @@ class ClientSM:
     def handle_tictactoe_event(self, msg):
         self.out_msg += TICTACTOE_EVENT_PREFIX + json.dumps(msg)
 
+    def format_who_results(self, results):
+        if not isinstance(results, str):
+            return str(results)
+        if "{" not in results:
+            return results
+
+        try:
+            users_part = results.split("Users:", 1)[1].split("Groups:", 1)[0]
+            groups_part = results.split("Groups:", 1)[1]
+            users_text = users_part.replace("-", "").strip()
+            groups_text = groups_part.replace("-", "").strip()
+            users = ast.literal_eval(users_text)
+            groups = ast.literal_eval(groups_text)
+        except Exception:
+            return results
+
+        lines = ["Online users:"]
+        if len(users) == 0:
+            lines.append("None")
+        else:
+            for name in sorted(users.keys()):
+                status = "chatting" if users[name] == 1 else "online"
+                lines.append("- " + name + " (" + status + ")")
+
+        lines.append("")
+        lines.append("Chat groups:")
+        if len(groups) == 0:
+            lines.append("None")
+        else:
+            for index, members in enumerate(groups.values(), start = 1):
+                lines.append("- Group " + str(index) + ": " + ", ".join(members))
+        return "\n".join(lines) + "\n"
+
     def format_scoreboard(self, game, scores):
         title = game.capitalize() + " Leaderboard"
         if len(scores) == 0:
@@ -145,7 +179,7 @@ class ClientSM:
                     mysend(self.s, json.dumps({"action":"list"}))
                     logged_in = json.loads(myrecv(self.s))["results"]
                     self.out_msg += 'Here are all the users in the system:\n'
-                    self.out_msg += logged_in
+                    self.out_msg += self.format_who_results(logged_in)
 
                 elif my_msg.startswith(GAME_SCORE_PREFIX):
                     self.submit_game_score(my_msg)
@@ -234,7 +268,7 @@ class ClientSM:
                     mysend(self.s, json.dumps({"action":"list"}))
                     logged_in = json.loads(myrecv(self.s))["results"]
                     self.out_msg += 'Here are all the users in the system:\n'
-                    self.out_msg += logged_in
+                    self.out_msg += self.format_who_results(logged_in)
                 elif my_msg.startswith(GAME_SCORE_PREFIX):
                     self.submit_game_score(my_msg)
                 elif my_msg.startswith(GAME_LEADERBOARD_PREFIX):

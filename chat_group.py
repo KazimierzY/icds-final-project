@@ -99,11 +99,24 @@ class Group:
         return
 
     def list_all(self):
-        # a simple minded implementation
-        full_list = "Users: ------------" + "\n"
-        full_list += str(self.members) + "\n"
-        full_list += "Groups: -----------" + "\n"
-        full_list += str(self.chat_grps) + "\n"
+        full_list = "Online users:\n"
+        if len(self.members) == 0:
+            full_list += "None\n"
+        else:
+            for name in sorted(self.members.keys()):
+                status = "chatting" if self.members[name] == S_TALKING else "online"
+                full_list += "- " + name + " (" + status + ")\n"
+
+        full_list += "\nChat groups:\n"
+        active_groups = [
+            members for members in self.chat_grps.values()
+            if len(members) > 0
+        ]
+        if len(active_groups) == 0:
+            full_list += "None\n"
+        else:
+            for index, members in enumerate(active_groups, start = 1):
+                full_list += "- Group " + str(index) + ": " + ", ".join(members) + "\n"
         return full_list
 
     def list_all2(self, me):

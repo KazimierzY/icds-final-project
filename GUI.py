@@ -280,14 +280,14 @@ class GUI:
         self.aipicButton = self.add_sidebar_button("AI Picture", self.ask_aipic_mode,
                                                    bg = "#EAF2FF",
                                                    activebackground = "#D8E8FF")
+        self.add_sidebar_button("Summary", self.show_chat_summary)
+        self.add_sidebar_button("Keywords", self.show_chat_keywords)
         self.botStyleButton = self.add_sidebar_button("Bot Style", self.ask_bot_personality)
 
         self.add_sidebar_section("Tools")
         self.add_sidebar_button("Time", lambda: self.send_quick_command("time"))
         self.add_sidebar_button("Poem", self.ask_poem)
         self.add_sidebar_button("Search", self.ask_search)
-        self.add_sidebar_button("Summary", self.show_chat_summary)
-        self.add_sidebar_button("Keywords", self.show_chat_keywords)
         self.add_sidebar_button("Clear Chat", self.clear_chat)
 
         self.rightPanel = Frame(self.mainFrame,
